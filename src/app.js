@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 
 const authRoutes = require('./routes/auth.routes');
 const memberRoutes = require('./routes/member.routes');
+const adminRoutes = require('./routes/admin.routes');
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -16,6 +17,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/auth', authRoutes);
 app.use('/members', memberRoutes);
+app.use('/admin', adminRoutes);
 
 app.use(errorHandler);
 

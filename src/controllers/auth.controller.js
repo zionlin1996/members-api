@@ -4,6 +4,7 @@ const authService = require('../services/auth.service');
 const passkeyService = require('../services/passkey.service');
 const googleService = require('../services/google.service');
 const telegramService = require('../services/telegram.service');
+const memberService = require('../services/member.service');
 const { isValidUsername } = require('../utils/username');
 const { signStateToken, verifyStateToken } = require('../utils/jwt');
 
@@ -274,6 +275,15 @@ async function loginWithTelegram(req, res, next) {
   }
 }
 
+async function me(req, res, next) {
+  try {
+    const member = await memberService.findById(req.memberId);
+    return res.json({ member });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   registerPassword,
   login,
@@ -289,4 +299,5 @@ module.exports = {
   handleGoogleCallback,
   registerWithTelegram,
   loginWithTelegram,
+  me,
 };

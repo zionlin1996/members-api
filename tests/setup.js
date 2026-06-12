@@ -11,3 +11,4 @@ process.env.JWT_ACCESS_EXPIRES_IN = '15m';
 process.env.JWT_REFRESH_EXPIRES_IN = '7d';
 process.env.BCRYPT_ROUNDS = '1';
 process.env.TELEGRAM_BOT_TOKEN = 'test_bot_token';
+process.env.ADMIN_API_KEY = 'test-admin-key';

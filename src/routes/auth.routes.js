@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const authController = require('../controllers/auth.controller');
+const { authenticate } = require('../middleware/auth.middleware');
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.post('/login', authController.login);
 router.post('/login/telegram', authController.loginWithTelegram);
 router.post('/login/passkey/start', authController.startPasskeyLogin);
 router.post('/login/passkey/finish', authController.finishPasskeyLogin);
+router.get('/me', authenticate, authController.me);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 
