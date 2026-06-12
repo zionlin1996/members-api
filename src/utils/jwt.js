@@ -45,10 +45,20 @@ function refreshTokenExpiresAt() {
   return new Date(Date.now() + ms(ttl));
 }
 
+function signStateToken(payload) {
+  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: '10m' });
+}
+
+function verifyStateToken(token) {
+  return jwt.verify(token, env.JWT_ACCESS_SECRET);
+}
+
 module.exports = {
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
   refreshTokenExpiresAt,
+  signStateToken,
+  verifyStateToken,
 };

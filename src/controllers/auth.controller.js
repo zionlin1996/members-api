@@ -2,7 +2,9 @@
 
 const authService = require('../services/auth.service');
 const passkeyService = require('../services/passkey.service');
+const googleService = require('../services/google.service');
 const { isValidUsername } = require('../utils/username');
+const { signStateToken, verifyStateToken } = require('../utils/jwt');
 
 async function registerPassword(req, res, next) {
   try {
@@ -167,6 +169,68 @@ async function finishPasskeyLogin(req, res, next) {
   }
 }
 
+function redirectToGoogleRegister(req, res) {
+  const { displayName, username } = req.query;
+
+  if (!displayName || !username) {
+    return res.status(400).json({ message: 'displayName and username are required' });
+  }
+
+  if (!isValidUsername(username)) {
+    return res.status(400).json({ message: 'Invalid username format' });
+  }
+
+  const state = signStateToken({ flow: 'register', displayName, username });
+  return res.redirect(googleService.buildAuthUrl(state));
+}
+
+function redirectToGoogleLogin(_req, res) {
+  const state = signStateToken({ flow: 'login' });
+  return res.redirect(googleService.buildAuthUrl(state));
+}
+
+async function handleGoogleCallback(req, res, next) {
+  try {
+    const { code, state, error } = req.query;
+
+    if (error) {
+      return res.status(400).json({ message: `Google OAuth error: ${error}` });
+    }
+
+    if (!code || !state) {
+      return res.status(400).json({ message: 'Missing code or state' });
+    }
+
+    let statePayload;
+    try {
+      statePayload = verifyStateToken(state);
+    } catch {
+      return res.status(400).json({ message: 'Invalid or expired state token' });
+    }
+
+    const profile = await googleService.fetchProfile(code);
+
+    if (statePayload.flow === 'register') {
+      const { displayName, username } = statePayload;
+      const member = await googleService.registerWithGoogle({ profile, displayName, username });
+      return res.status(201).json({ member });
+    }
+
+    const { accessToken, refreshToken } = await googleService.loginWithGoogle({ profile });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ accessToken });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   registerPassword,
   login,
@@ -177,4 +241,7 @@ module.exports = {
   finishPasskeyRegistration,
   startPasskeyLogin,
   finishPasskeyLogin,
+  redirectToGoogleRegister,
+  redirectToGoogleLogin,
+  handleGoogleCallback,
 };
