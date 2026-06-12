@@ -175,6 +175,30 @@ describe('PATCH /members/:id', () => {
 
     expect(res.status).toBe(404);
   });
+
+  it('409 — username already taken', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+    prisma.member.update.mockRejectedValue({ code: 'P2002', meta: { target: ['username'] } });
+
+    const res = await request(app)
+      .patch(`/members/${MEMBER_ID}`)
+      .set('Authorization', TOKEN)
+      .send({ username: 'takenname' });
+
+    expect(res.status).toBe(409);
+  });
+
+  it('409 — assignedEmail already taken', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+    prisma.member.update.mockRejectedValue({ code: 'P2002', meta: { target: ['assignedEmail'] } });
+
+    const res = await request(app)
+      .patch(`/members/${MEMBER_ID}`)
+      .set('Authorization', TOKEN)
+      .send({ assignedEmail: 'taken@example.com' });
+
+    expect(res.status).toBe(409);
+  });
 });
 
 // ---------------------------------------------------------------------------

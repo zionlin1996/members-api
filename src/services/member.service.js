@@ -36,11 +36,21 @@ async function update(id, data) {
   if (data.username) updateData.username = data.username;
   if (data.password) updateData.password = await bcrypt.hash(data.password, env.BCRYPT_ROUNDS);
 
-  return prisma.member.update({
-    where: { id },
-    data: updateData,
-    select: SAFE_SELECT,
-  });
+  try {
+    return await prisma.member.update({
+      where: { id },
+      data: updateData,
+      select: SAFE_SELECT,
+    });
+  } catch (err) {
+    if (err.code === 'P2002') {
+      const field = err.meta?.target?.[0];
+      const out = new Error(field === 'username' ? 'Username already taken' : 'Email already taken');
+      out.status = 409;
+      throw out;
+    }
+    throw err;
+  }
 }
 
 async function remove(id) {
