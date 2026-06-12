@@ -3,6 +3,7 @@
 const authService = require('../services/auth.service');
 const passkeyService = require('../services/passkey.service');
 const googleService = require('../services/google.service');
+const telegramService = require('../services/telegram.service');
 const { isValidUsername } = require('../utils/username');
 const { signStateToken, verifyStateToken } = require('../utils/jwt');
 
@@ -231,6 +232,48 @@ async function handleGoogleCallback(req, res, next) {
   }
 }
 
+async function registerWithTelegram(req, res, next) {
+  try {
+    const { displayName, username, telegramData } = req.body;
+
+    if (!displayName || !username || !telegramData) {
+      return res.status(400).json({ message: 'displayName, username, and telegramData are required' });
+    }
+
+    if (!isValidUsername(username)) {
+      return res.status(400).json({ message: 'Invalid username format' });
+    }
+
+    const member = await telegramService.registerWithTelegram({ telegramData, displayName, username });
+    return res.status(201).json({ member });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function loginWithTelegram(req, res, next) {
+  try {
+    const { telegramData } = req.body;
+
+    if (!telegramData) {
+      return res.status(400).json({ message: 'telegramData is required' });
+    }
+
+    const { accessToken, refreshToken } = await telegramService.loginWithTelegram({ telegramData });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ accessToken });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   registerPassword,
   login,
@@ -244,4 +287,6 @@ module.exports = {
   redirectToGoogleRegister,
   redirectToGoogleLogin,
   handleGoogleCallback,
+  registerWithTelegram,
+  loginWithTelegram,
 };
