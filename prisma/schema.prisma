@@ -8,15 +8,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum MemberStatus {
+  UNVERIFIED
+  ACTIVE
+  SUSPENDED
+}
+
+enum CredentialType {
+  PASSWORD
+  PASSKEY
+  GOOGLE
+  TELEGRAM
+}
+
 model Member {
   id            String         @id @default(uuid())
+  displayName   String
   username      String         @unique
-  password      String
-  assignedEmail String         @unique
-  backupEmail   String?
+  status        MemberStatus   @default(UNVERIFIED)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
+  credentials   Credential[]
+}
+
+model Credential {
+  id           String         @id @default(uuid())
+  memberId     String
+  member       Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  type         CredentialType
+  credentialId String?        @unique
+  providerId   String?
+  meta         Json
+  createdAt    DateTime       @default(now())
+
+  @@unique([type, providerId])
 }
 
 model RefreshToken {
@@ -24,6 +50,14 @@ model RefreshToken {
   token     String   @unique
   memberId  String
   member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PendingChallenge {
+  id        String   @id @default(uuid())
+  challenge String
+  context   Json
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
