@@ -24,27 +24,29 @@ const app = require('../src/app');
 const prisma = require('../src/config/prisma');
 const { signRefreshToken } = require('../src/utils/jwt');
 
+const MEMBER_ID = 'member-uuid-1';
+
 const MEMBER = {
-  id: 'member-uuid-1',
+  id: MEMBER_ID,
+  displayName: 'Test User',
   username: 'testuser',
-  assignedEmail: 'assigned@example.com',
-  backupEmail: null,
+  status: 'ACTIVE',
   createdAt: new Date('2024-01-01'),
-  updatedAt: new Date('2024-01-01'),
 };
 
 // ---------------------------------------------------------------------------
-// POST /auth/register
+// POST /auth/register/password
 // ---------------------------------------------------------------------------
-describe('POST /auth/register', () => {
+describe('POST /auth/register/password', () => {
   it('201 — creates member with valid data', async () => {
-    prisma.member.findFirst.mockResolvedValue(null);
+    prisma.member.findUnique.mockResolvedValue(null);
     prisma.member.create.mockResolvedValue(MEMBER);
 
-    const res = await request(app).post('/auth/register').send({
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
       username: 'testuser',
       password: 'password123',
-      assignedEmail: 'assigned@example.com',
+      backupEmail: 'backup@example.com',
     });
 
     expect(res.status).toBe(201);
@@ -52,69 +54,63 @@ describe('POST /auth/register', () => {
     expect(res.body.member.password).toBeUndefined();
   });
 
-  it('201 — creates member with optional backupEmail', async () => {
-    prisma.member.findFirst.mockResolvedValue(null);
-    prisma.member.create.mockResolvedValue({ ...MEMBER, backupEmail: 'backup@example.com' });
-
-    const res = await request(app).post('/auth/register').send({
+  it('400 — missing displayName', async () => {
+    const res = await request(app).post('/auth/register/password').send({
       username: 'testuser',
       password: 'password123',
-      assignedEmail: 'assigned@example.com',
       backupEmail: 'backup@example.com',
     });
-
-    expect(res.status).toBe(201);
-    expect(res.body.member.backupEmail).toBe('backup@example.com');
+    expect(res.status).toBe(400);
   });
 
   it('400 — missing username', async () => {
-    const res = await request(app).post('/auth/register').send({
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
       password: 'password123',
-      assignedEmail: 'assigned@example.com',
+      backupEmail: 'backup@example.com',
     });
     expect(res.status).toBe(400);
   });
 
   it('400 — missing password', async () => {
-    const res = await request(app).post('/auth/register').send({
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
       username: 'testuser',
-      assignedEmail: 'assigned@example.com',
+      backupEmail: 'backup@example.com',
     });
     expect(res.status).toBe(400);
   });
 
-  it('400 — missing assignedEmail', async () => {
-    const res = await request(app).post('/auth/register').send({
+  it('400 — missing backupEmail', async () => {
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
       username: 'testuser',
       password: 'password123',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('400 — invalid username format', async () => {
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
+      username: 'Invalid User Name!',
+      password: 'password123',
+      backupEmail: 'backup@example.com',
     });
     expect(res.status).toBe(400);
   });
 
   it('409 — username already taken', async () => {
-    prisma.member.findFirst.mockResolvedValue({ ...MEMBER, username: 'testuser' });
+    prisma.member.findUnique.mockResolvedValue({ id: 'existing-id' });
 
-    const res = await request(app).post('/auth/register').send({
+    const res = await request(app).post('/auth/register/password').send({
+      displayName: 'Test User',
       username: 'testuser',
       password: 'password123',
-      assignedEmail: 'other@example.com',
+      backupEmail: 'backup@example.com',
     });
 
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/username/);
-  });
-
-  it('409 — assignedEmail already taken', async () => {
-    prisma.member.findFirst.mockResolvedValue({ ...MEMBER, username: 'otheruser' });
-
-    const res = await request(app).post('/auth/register').send({
-      username: 'newuser',
-      password: 'password123',
-      assignedEmail: 'assigned@example.com',
-    });
-
-    expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/assignedEmail/);
   });
 });
 
@@ -124,7 +120,10 @@ describe('POST /auth/register', () => {
 describe('POST /auth/login', () => {
   it('200 — returns accessToken and sets httpOnly refreshToken cookie', async () => {
     const hash = await bcrypt.hash('password123', 1);
-    prisma.member.findUnique.mockResolvedValue({ ...MEMBER, password: hash });
+    prisma.member.findUnique.mockResolvedValue({
+      ...MEMBER,
+      credentials: [{ meta: { passwordHash: hash } }],
+    });
     prisma.refreshToken.create.mockResolvedValue({});
 
     const res = await request(app).post('/auth/login').send({
@@ -162,7 +161,10 @@ describe('POST /auth/login', () => {
 
   it('401 — wrong password', async () => {
     const hash = await bcrypt.hash('correct-password', 1);
-    prisma.member.findUnique.mockResolvedValue({ ...MEMBER, password: hash });
+    prisma.member.findUnique.mockResolvedValue({
+      ...MEMBER,
+      credentials: [{ meta: { passwordHash: hash } }],
+    });
 
     const res = await request(app).post('/auth/login').send({
       username: 'testuser',
@@ -171,6 +173,22 @@ describe('POST /auth/login', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('403 — account pending approval', async () => {
+    const hash = await bcrypt.hash('password123', 1);
+    prisma.member.findUnique.mockResolvedValue({
+      ...MEMBER,
+      status: 'UNVERIFIED',
+      credentials: [{ meta: { passwordHash: hash } }],
+    });
+
+    const res = await request(app).post('/auth/login').send({
+      username: 'testuser',
+      password: 'password123',
+    });
+
+    expect(res.status).toBe(403);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -178,10 +196,10 @@ describe('POST /auth/login', () => {
 // ---------------------------------------------------------------------------
 describe('POST /auth/refresh', () => {
   it('200 — rotates token and returns new accessToken', async () => {
-    const token = signRefreshToken(MEMBER.id);
+    const token = signRefreshToken(MEMBER_ID);
     prisma.refreshToken.findUnique.mockResolvedValue({
       token,
-      memberId: MEMBER.id,
+      memberId: MEMBER_ID,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
     prisma.refreshToken.delete.mockResolvedValue({});
@@ -209,7 +227,7 @@ describe('POST /auth/refresh', () => {
   });
 
   it('401 — valid JWT but not found in DB', async () => {
-    const token = signRefreshToken(MEMBER.id);
+    const token = signRefreshToken(MEMBER_ID);
     prisma.refreshToken.findUnique.mockResolvedValue(null);
 
     const res = await request(app)
@@ -220,11 +238,11 @@ describe('POST /auth/refresh', () => {
   });
 
   it('401 — token is expired in DB', async () => {
-    const token = signRefreshToken(MEMBER.id);
+    const token = signRefreshToken(MEMBER_ID);
     prisma.refreshToken.findUnique.mockResolvedValue({
       token,
-      memberId: MEMBER.id,
-      expiresAt: new Date(Date.now() - 1000), // already expired
+      memberId: MEMBER_ID,
+      expiresAt: new Date(Date.now() - 1000),
     });
 
     const res = await request(app)
@@ -236,71 +254,11 @@ describe('POST /auth/refresh', () => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /auth/availability
-// ---------------------------------------------------------------------------
-describe('GET /auth/availability', () => {
-  it('400 — no query params provided', async () => {
-    const res = await request(app).get('/auth/availability');
-    expect(res.status).toBe(400);
-  });
-
-  it('200 — username is available', async () => {
-    prisma.member.findUnique.mockResolvedValue(null);
-
-    const res = await request(app).get('/auth/availability?username=freeuser');
-
-    expect(res.status).toBe(200);
-    expect(res.body.username).toEqual({ available: true });
-    expect(res.body.assignedEmail).toBeUndefined();
-  });
-
-  it('200 — username is taken', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-
-    const res = await request(app).get('/auth/availability?username=testuser');
-
-    expect(res.status).toBe(200);
-    expect(res.body.username).toEqual({ available: false });
-  });
-
-  it('200 — assignedEmail is available', async () => {
-    prisma.member.findUnique.mockResolvedValue(null);
-
-    const res = await request(app).get('/auth/availability?assignedEmail=free@example.com');
-
-    expect(res.status).toBe(200);
-    expect(res.body.assignedEmail).toEqual({ available: true });
-    expect(res.body.username).toBeUndefined();
-  });
-
-  it('200 — assignedEmail is taken', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-
-    const res = await request(app).get('/auth/availability?assignedEmail=assigned@example.com');
-
-    expect(res.status).toBe(200);
-    expect(res.body.assignedEmail).toEqual({ available: false });
-  });
-
-  it('200 — checks both fields independently', async () => {
-    prisma.member.findUnique
-      .mockResolvedValueOnce(MEMBER)  // username taken
-      .mockResolvedValueOnce(null);   // assignedEmail free
-
-    const res = await request(app).get('/auth/availability?username=testuser&assignedEmail=free@example.com');
-
-    expect(res.status).toBe(200);
-    expect(res.body.username).toEqual({ available: false });
-    expect(res.body.assignedEmail).toEqual({ available: true });
-  });
-});
-
-// ---------------------------------------------------------------------------
 // POST /auth/logout
 // ---------------------------------------------------------------------------
 describe('POST /auth/logout', () => {
   it('204 — invalidates token and clears cookie', async () => {
-    const token = signRefreshToken(MEMBER.id);
+    const token = signRefreshToken(MEMBER_ID);
     prisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app)
@@ -314,5 +272,38 @@ describe('POST /auth/logout', () => {
   it('204 — succeeds even with no cookie present', async () => {
     const res = await request(app).post('/auth/logout');
     expect(res.status).toBe(204);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /auth/availability
+// ---------------------------------------------------------------------------
+describe('GET /auth/availability', () => {
+  it('400 — no query params provided', async () => {
+    const res = await request(app).get('/auth/availability');
+    expect(res.status).toBe(400);
+  });
+
+  it('400 — invalid username format', async () => {
+    const res = await request(app).get('/auth/availability?username=Invalid+Name!');
+    expect(res.status).toBe(400);
+  });
+
+  it('200 — username is available', async () => {
+    prisma.member.findUnique.mockResolvedValue(null);
+
+    const res = await request(app).get('/auth/availability?username=freeuser');
+
+    expect(res.status).toBe(200);
+    expect(res.body.username).toEqual({ available: true });
+  });
+
+  it('200 — username is taken', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+
+    const res = await request(app).get('/auth/availability?username=testuser');
+
+    expect(res.status).toBe(200);
+    expect(res.body.username).toEqual({ available: false });
   });
 });

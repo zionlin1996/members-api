@@ -1,16 +1,21 @@
 'use strict';
 
 const authService = require('../services/auth.service');
+const { isValidUsername } = require('../utils/username');
 
-async function register(req, res, next) {
+async function registerPassword(req, res, next) {
   try {
-    const { username, password, assignedEmail, backupEmail } = req.body;
+    const { displayName, username, password, backupEmail } = req.body;
 
-    if (!username || !password || !assignedEmail) {
-      return res.status(400).json({ message: 'username, password, and assignedEmail are required' });
+    if (!displayName || !username || !password || !backupEmail) {
+      return res.status(400).json({ message: 'displayName, username, password, and backupEmail are required' });
     }
 
-    const member = await authService.register({ username, password, assignedEmail, backupEmail });
+    if (!isValidUsername(username)) {
+      return res.status(400).json({ message: 'Invalid username format' });
+    }
+
+    const member = await authService.registerPassword({ displayName, username, password, backupEmail });
     return res.status(201).json({ member });
   } catch (err) {
     next(err);
@@ -31,7 +36,7 @@ async function login(req, res, next) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({ accessToken });
@@ -77,21 +82,21 @@ async function logout(req, res, next) {
 
 async function checkAvailability(req, res, next) {
   try {
-    const { username, assignedEmail } = req.query;
+    const { username } = req.query;
 
-    if (!username && !assignedEmail) {
-      return res.status(400).json({ message: 'At least one of username or assignedEmail is required' });
+    if (!username) {
+      return res.status(400).json({ message: 'username is required' });
     }
 
-    const result = await authService.checkAvailability({
-      username: username || undefined,
-      assignedEmail: assignedEmail || undefined,
-    });
+    if (!isValidUsername(username)) {
+      return res.status(400).json({ message: 'Invalid username format' });
+    }
 
+    const result = await authService.checkAvailability({ username });
     return res.json(result);
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { register, login, refresh, logout, checkAvailability };
+module.exports = { registerPassword, login, refresh, logout, checkAvailability };

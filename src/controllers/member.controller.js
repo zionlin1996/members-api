@@ -22,7 +22,7 @@ async function show(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    const allowed = ['username', 'password', 'assignedEmail', 'backupEmail'];
+    const allowed = ['username', 'displayName'];
     const data = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowed.includes(key))
     );

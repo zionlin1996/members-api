@@ -10,35 +10,58 @@ const {
   refreshTokenExpiresAt,
 } = require('../utils/jwt');
 
-async function register({ username, password, assignedEmail, backupEmail }) {
-  const existing = await prisma.member.findFirst({
-    where: { OR: [{ username }, { assignedEmail }] },
-  });
+const REGISTER_SELECT = {
+  id: true,
+  displayName: true,
+  username: true,
+  status: true,
+  createdAt: true,
+};
+
+async function registerPassword({ displayName, username, password, backupEmail }) {
+  const existing = await prisma.member.findUnique({ where: { username }, select: { id: true } });
   if (existing) {
-    const field = existing.username === username ? 'username' : 'assignedEmail';
-    const err = new Error(`${field} is already taken`);
+    const err = new Error('Username already taken');
     err.status = 409;
     throw err;
   }
 
   const hashed = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
-  const member = await prisma.member.create({
-    data: { username, password: hashed, assignedEmail, backupEmail },
-    select: { id: true, username: true, assignedEmail: true, backupEmail: true, createdAt: true },
+  return prisma.member.create({
+    data: {
+      displayName,
+      username,
+      credentials: {
+        create: {
+          type: 'PASSWORD',
+          meta: { passwordHash: hashed, backupEmail },
+        },
+      },
+    },
+    select: REGISTER_SELECT,
   });
-
-  return member;
 }
 
 async function login({ username, password }) {
-  const member = await prisma.member.findUnique({ where: { username } });
-  if (!member) {
+  const member = await prisma.member.findUnique({
+    where: { username },
+    include: { credentials: { where: { type: 'PASSWORD' } } },
+  });
+
+  if (!member || !member.credentials.length) {
     const err = new Error('Invalid credentials');
     err.status = 401;
     throw err;
   }
 
-  const valid = await bcrypt.compare(password, member.password);
+  if (member.status !== 'ACTIVE') {
+    const err = new Error('Account pending approval');
+    err.status = 403;
+    throw err;
+  }
+
+  const { passwordHash } = member.credentials[0].meta;
+  const valid = await bcrypt.compare(password, passwordHash);
   if (!valid) {
     const err = new Error('Invalid credentials');
     err.status = 401;
@@ -49,11 +72,7 @@ async function login({ username, password }) {
   const refreshToken = signRefreshToken(member.id);
 
   await prisma.refreshToken.create({
-    data: {
-      token: refreshToken,
-      memberId: member.id,
-      expiresAt: refreshTokenExpiresAt(),
-    },
+    data: { token: refreshToken, memberId: member.id, expiresAt: refreshTokenExpiresAt() },
   });
 
   return { accessToken, refreshToken };
@@ -76,16 +95,11 @@ async function refresh(token) {
     throw err;
   }
 
-  // Rotate: delete old, issue new
   await prisma.refreshToken.delete({ where: { token } });
 
   const newRefreshToken = signRefreshToken(payload.sub);
   await prisma.refreshToken.create({
-    data: {
-      token: newRefreshToken,
-      memberId: payload.sub,
-      expiresAt: refreshTokenExpiresAt(),
-    },
+    data: { token: newRefreshToken, memberId: payload.sub, expiresAt: refreshTokenExpiresAt() },
   });
 
   const accessToken = signAccessToken(payload.sub);
@@ -96,20 +110,9 @@ async function logout(token) {
   await prisma.refreshToken.deleteMany({ where: { token } });
 }
 
-async function checkAvailability({ username, assignedEmail }) {
-  const result = {};
-
-  if (username !== undefined) {
-    const existing = await prisma.member.findUnique({ where: { username }, select: { id: true } });
-    result.username = { available: !existing };
-  }
-
-  if (assignedEmail !== undefined) {
-    const existing = await prisma.member.findUnique({ where: { assignedEmail }, select: { id: true } });
-    result.assignedEmail = { available: !existing };
-  }
-
-  return result;
+async function checkAvailability({ username }) {
+  const existing = await prisma.member.findUnique({ where: { username }, select: { id: true } });
+  return { username: { available: !existing } };
 }
 
-module.exports = { register, login, refresh, logout, checkAvailability };
+module.exports = { registerPassword, login, refresh, logout, checkAvailability };

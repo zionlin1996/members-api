@@ -28,9 +28,9 @@ const TOKEN = `Bearer ${signAccessToken(MEMBER_ID)}`;
 
 const MEMBER = {
   id: MEMBER_ID,
+  displayName: 'Test User',
   username: 'testuser',
-  assignedEmail: 'assigned@example.com',
-  backupEmail: null,
+  status: 'ACTIVE',
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
 };
@@ -121,32 +121,17 @@ describe('PATCH /members/:id', () => {
     expect(res.body.member.username).toBe('newname');
   });
 
-  it('200 — updates backupEmail (including to null)', async () => {
+  it('200 — updates displayName', async () => {
     prisma.member.findUnique.mockResolvedValue(MEMBER);
-    prisma.member.update.mockResolvedValue({ ...MEMBER, backupEmail: null });
+    prisma.member.update.mockResolvedValue({ ...MEMBER, displayName: 'New Name' });
 
     const res = await request(app)
       .patch(`/members/${MEMBER_ID}`)
       .set('Authorization', TOKEN)
-      .send({ backupEmail: null });
+      .send({ displayName: 'New Name' });
 
     expect(res.status).toBe(200);
-  });
-
-  it('200 — updates password (hashed, not returned)', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-    prisma.member.update.mockResolvedValue(MEMBER);
-
-    const res = await request(app)
-      .patch(`/members/${MEMBER_ID}`)
-      .set('Authorization', TOKEN)
-      .send({ password: 'newpassword' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.member.password).toBeUndefined();
-    // Ensure prisma.update was called with a hashed value, not plain text
-    const updateCall = prisma.member.update.mock.calls[0][0];
-    expect(updateCall.data.password).not.toBe('newpassword');
+    expect(res.body.member.displayName).toBe('New Name');
   });
 
   it('400 — no updatable fields provided', async () => {
@@ -154,6 +139,17 @@ describe('PATCH /members/:id', () => {
       .patch(`/members/${MEMBER_ID}`)
       .set('Authorization', TOKEN)
       .send({ unknownField: 'value' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('400 — invalid username format', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+
+    const res = await request(app)
+      .patch(`/members/${MEMBER_ID}`)
+      .set('Authorization', TOKEN)
+      .send({ username: 'Invalid Name!' });
 
     expect(res.status).toBe(400);
   });
@@ -184,18 +180,6 @@ describe('PATCH /members/:id', () => {
       .patch(`/members/${MEMBER_ID}`)
       .set('Authorization', TOKEN)
       .send({ username: 'takenname' });
-
-    expect(res.status).toBe(409);
-  });
-
-  it('409 — assignedEmail already taken', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-    prisma.member.update.mockRejectedValue({ code: 'P2002', meta: { target: ['assignedEmail'] } });
-
-    const res = await request(app)
-      .patch(`/members/${MEMBER_ID}`)
-      .set('Authorization', TOKEN)
-      .send({ assignedEmail: 'taken@example.com' });
 
     expect(res.status).toBe(409);
   });

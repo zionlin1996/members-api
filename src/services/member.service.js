@@ -1,14 +1,13 @@
 'use strict';
 
-const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
-const env = require('../config/env');
+const { isValidUsername } = require('../utils/username');
 
 const SAFE_SELECT = {
   id: true,
+  displayName: true,
   username: true,
-  assignedEmail: true,
-  backupEmail: true,
+  status: true,
   createdAt: true,
   updatedAt: true,
 };
@@ -28,13 +27,18 @@ async function findById(id) {
 }
 
 async function update(id, data) {
-  await findById(id); // ensures member exists
+  await findById(id);
 
   const updateData = {};
-  if (data.backupEmail !== undefined) updateData.backupEmail = data.backupEmail;
-  if (data.assignedEmail) updateData.assignedEmail = data.assignedEmail;
-  if (data.username) updateData.username = data.username;
-  if (data.password) updateData.password = await bcrypt.hash(data.password, env.BCRYPT_ROUNDS);
+  if (data.displayName) updateData.displayName = data.displayName;
+  if (data.username) {
+    if (!isValidUsername(data.username)) {
+      const err = new Error('Invalid username format');
+      err.status = 400;
+      throw err;
+    }
+    updateData.username = data.username;
+  }
 
   try {
     return await prisma.member.update({
@@ -44,8 +48,7 @@ async function update(id, data) {
     });
   } catch (err) {
     if (err.code === 'P2002') {
-      const field = err.meta?.target?.[0];
-      const out = new Error(field === 'username' ? 'Username already taken' : 'Email already taken');
+      const out = new Error('Username already taken');
       out.status = 409;
       throw out;
     }
@@ -54,7 +57,7 @@ async function update(id, data) {
 }
 
 async function remove(id) {
-  await findById(id); // ensures member exists
+  await findById(id);
   await prisma.member.delete({ where: { id } });
 }
 
