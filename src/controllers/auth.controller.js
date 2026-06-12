@@ -1,6 +1,7 @@
 'use strict';
 
 const authService = require('../services/auth.service');
+const passkeyService = require('../services/passkey.service');
 const { isValidUsername } = require('../utils/username');
 
 async function registerPassword(req, res, next) {
@@ -99,4 +100,81 @@ async function checkAvailability(req, res, next) {
   }
 }
 
-module.exports = { registerPassword, login, refresh, logout, checkAvailability };
+async function startPasskeyRegistration(req, res, next) {
+  try {
+    const { displayName, username, backupEmail } = req.body;
+
+    if (!displayName || !username || !backupEmail) {
+      return res.status(400).json({ message: 'displayName, username, and backupEmail are required' });
+    }
+
+    if (!isValidUsername(username)) {
+      return res.status(400).json({ message: 'Invalid username format' });
+    }
+
+    const result = await passkeyService.startRegistration({ displayName, username, backupEmail });
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function finishPasskeyRegistration(req, res, next) {
+  try {
+    const { sessionId, credential } = req.body;
+
+    if (!sessionId || !credential) {
+      return res.status(400).json({ message: 'sessionId and credential are required' });
+    }
+
+    const member = await passkeyService.finishRegistration({ sessionId, credential });
+    return res.status(201).json({ member });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startPasskeyLogin(req, res, next) {
+  try {
+    const { username } = req.body;
+    const result = await passkeyService.startAuthentication({ username });
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function finishPasskeyLogin(req, res, next) {
+  try {
+    const { sessionId, credential } = req.body;
+
+    if (!sessionId || !credential) {
+      return res.status(400).json({ message: 'sessionId and credential are required' });
+    }
+
+    const { accessToken, refreshToken } = await passkeyService.finishAuthentication({ sessionId, credential });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ accessToken });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  registerPassword,
+  login,
+  refresh,
+  logout,
+  checkAvailability,
+  startPasskeyRegistration,
+  finishPasskeyRegistration,
+  startPasskeyLogin,
+  finishPasskeyLogin,
+};
