@@ -96,4 +96,20 @@ async function logout(token) {
   await prisma.refreshToken.deleteMany({ where: { token } });
 }
 
-module.exports = { register, login, refresh, logout };
+async function checkAvailability({ username, assignedEmail }) {
+  const result = {};
+
+  if (username !== undefined) {
+    const existing = await prisma.member.findUnique({ where: { username }, select: { id: true } });
+    result.username = { available: !existing };
+  }
+
+  if (assignedEmail !== undefined) {
+    const existing = await prisma.member.findUnique({ where: { assignedEmail }, select: { id: true } });
+    result.assignedEmail = { available: !existing };
+  }
+
+  return result;
+}
+
+module.exports = { register, login, refresh, logout, checkAvailability };

@@ -75,4 +75,23 @@ async function logout(req, res, next) {
   }
 }
 
-module.exports = { register, login, refresh, logout };
+async function checkAvailability(req, res, next) {
+  try {
+    const { username, assignedEmail } = req.query;
+
+    if (!username && !assignedEmail) {
+      return res.status(400).json({ message: 'At least one of username or assignedEmail is required' });
+    }
+
+    const result = await authService.checkAvailability({
+      username: username || undefined,
+      assignedEmail: assignedEmail || undefined,
+    });
+
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login, refresh, logout, checkAvailability };

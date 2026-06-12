@@ -236,6 +236,66 @@ describe('POST /auth/refresh', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /auth/availability
+// ---------------------------------------------------------------------------
+describe('GET /auth/availability', () => {
+  it('400 — no query params provided', async () => {
+    const res = await request(app).get('/auth/availability');
+    expect(res.status).toBe(400);
+  });
+
+  it('200 — username is available', async () => {
+    prisma.member.findUnique.mockResolvedValue(null);
+
+    const res = await request(app).get('/auth/availability?username=freeuser');
+
+    expect(res.status).toBe(200);
+    expect(res.body.username).toEqual({ available: true });
+    expect(res.body.assignedEmail).toBeUndefined();
+  });
+
+  it('200 — username is taken', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+
+    const res = await request(app).get('/auth/availability?username=testuser');
+
+    expect(res.status).toBe(200);
+    expect(res.body.username).toEqual({ available: false });
+  });
+
+  it('200 — assignedEmail is available', async () => {
+    prisma.member.findUnique.mockResolvedValue(null);
+
+    const res = await request(app).get('/auth/availability?assignedEmail=free@example.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignedEmail).toEqual({ available: true });
+    expect(res.body.username).toBeUndefined();
+  });
+
+  it('200 — assignedEmail is taken', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+
+    const res = await request(app).get('/auth/availability?assignedEmail=assigned@example.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignedEmail).toEqual({ available: false });
+  });
+
+  it('200 — checks both fields independently', async () => {
+    prisma.member.findUnique
+      .mockResolvedValueOnce(MEMBER)  // username taken
+      .mockResolvedValueOnce(null);   // assignedEmail free
+
+    const res = await request(app).get('/auth/availability?username=testuser&assignedEmail=free@example.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.username).toEqual({ available: false });
+    expect(res.body.assignedEmail).toEqual({ available: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /auth/logout
 // ---------------------------------------------------------------------------
 describe('POST /auth/logout', () => {
