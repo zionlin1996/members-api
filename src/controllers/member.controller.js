@@ -22,6 +22,10 @@ async function show(req, res, next) {
 
 async function update(req, res, next) {
   try {
+    if (req.params.id !== req.memberId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
     const allowed = ['username', 'displayName'];
     const data = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowed.includes(key))
@@ -38,13 +42,4 @@ async function update(req, res, next) {
   }
 }
 
-async function remove(req, res, next) {
-  try {
-    await memberService.remove(req.params.id);
-    return res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = { list, show, update, remove };
+module.exports = { list, show, update };

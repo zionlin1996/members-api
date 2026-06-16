@@ -56,9 +56,4 @@ async function update(id, data) {
   }
 }
 
-async function remove(id) {
-  await findById(id);
-  await prisma.member.delete({ where: { id } });
-}
-
-module.exports = { findAll, findById, update, remove };
+module.exports = { findAll, findById, update };
