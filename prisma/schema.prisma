@@ -30,6 +30,45 @@ model Member {
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
   credentials   Credential[]
+  profile       Profile?
+}
+
+// 1:1 extended profile. All fields optional — members populate it over time.
+// Fields mirror OIDC standard claims (plus `pronouns`) so they map cleanly to
+// scopes when shared with third parties. `displayName`/`username` stay on Member
+// (the OIDC `name`/`preferred_username`); `member_since` is Member.createdAt.
+model Profile {
+  id       String @id @default(uuid())
+  memberId String @unique
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  // OIDC `profile` scope
+  givenName  String?
+  familyName String?
+  middleName String?
+  nickname   String?
+  birthdate  DateTime? // date only; rendered YYYY-MM-DD in claims
+  gender     String? //  free-form per OIDC
+  pronouns   String? //  custom claim (membership scope)
+  locale     String? //  BCP-47, e.g. en-US
+  zoneinfo   String? //  IANA tz, e.g. Europe/Zurich
+  picture    String? //  URL
+  website    String? //  URL
+  profileUrl String? //  OIDC `profile` URL
+
+  // OIDC `phone` scope
+  phoneNumber   String? //  E.164
+  phoneVerified Boolean @default(false)
+
+  // OIDC `address` scope (structured)
+  streetAddress String?
+  locality      String?
+  region        String?
+  postalCode    String?
+  country       String? //  ISO 3166-1 alpha-2
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Credential {
