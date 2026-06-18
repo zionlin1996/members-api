@@ -29,6 +29,16 @@ module.exports = {
   WEBAUTHN_RP_NAME: process.env.WEBAUTHN_RP_NAME || '',
   WEBAUTHN_ORIGIN: process.env.WEBAUTHN_ORIGIN || '',
 
+  // OIDC issuer (this API). OIDC_ISSUER must be the public base URL of the API
+  // and appears as `iss` in tokens + the discovery doc. OIDC_PRIVATE_KEY is a
+  // PEM (optionally base64-encoded) RSA private key; if unset, an ephemeral key
+  // is generated at boot (dev only). OIDC_CLIENT_ID is the audience of ID tokens.
+  OIDC_ISSUER: process.env.OIDC_ISSUER || `http://localhost:${process.env.PORT || '3000'}`,
+  OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID || 'members-web',
+  OIDC_PRIVATE_KEY: process.env.OIDC_PRIVATE_KEY || '',
+  // Domain used to compute member emails ({username}@EMAIL_DOMAIN) for claims.
+  EMAIL_DOMAIN: process.env.EMAIL_DOMAIN || 'yangfrenz.club',
+
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
   GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || '',

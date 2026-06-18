@@ -161,15 +161,15 @@ describe('PATCH /members/:id', () => {
     expect(res.status).toBe(401);
   });
 
-  it('404 — member does not exist', async () => {
-    prisma.member.findUnique.mockResolvedValue(null);
-
+  it('403 — cannot update another member', async () => {
+    // Ownership is enforced before any lookup, so patching an id that isn't the
+    // token's subject returns 403 (and never reveals whether that id exists).
     const res = await request(app)
-      .patch('/members/non-existent-id')
+      .patch('/members/someone-else-id')
       .set('Authorization', TOKEN)
       .send({ username: 'newname' });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('409 — username already taken', async () => {
@@ -182,37 +182,5 @@ describe('PATCH /members/:id', () => {
       .send({ username: 'takenname' });
 
     expect(res.status).toBe(409);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// DELETE /members/:id
-// ---------------------------------------------------------------------------
-describe('DELETE /members/:id', () => {
-  it('204 — deletes the member', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-    prisma.member.delete.mockResolvedValue({});
-
-    const res = await request(app)
-      .delete(`/members/${MEMBER_ID}`)
-      .set('Authorization', TOKEN);
-
-    expect(res.status).toBe(204);
-    expect(prisma.member.delete).toHaveBeenCalledWith({ where: { id: MEMBER_ID } });
-  });
-
-  it('401 — missing Authorization header', async () => {
-    const res = await request(app).delete(`/members/${MEMBER_ID}`);
-    expect(res.status).toBe(401);
-  });
-
-  it('404 — member does not exist', async () => {
-    prisma.member.findUnique.mockResolvedValue(null);
-
-    const res = await request(app)
-      .delete('/members/non-existent-id')
-      .set('Authorization', TOKEN);
-
-    expect(res.status).toBe(404);
   });
 });

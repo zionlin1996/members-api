@@ -3,6 +3,7 @@
 const prisma = require('../config/prisma');
 const env = require('../config/env');
 const { signAccessToken, signRefreshToken, refreshTokenExpiresAt } = require('../utils/jwt');
+const { issueIdToken } = require('./oidc.service');
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -109,13 +110,14 @@ async function loginWithGoogle({ profile }) {
   }
 
   const accessToken = signAccessToken(cred.member.id);
+  const idToken = await issueIdToken(cred.member.id);
   const refreshToken = signRefreshToken(cred.member.id);
 
   await prisma.refreshToken.create({
     data: { token: refreshToken, memberId: cred.member.id, expiresAt: refreshTokenExpiresAt() },
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, idToken, refreshToken };
 }
 
 module.exports = { buildAuthUrl, fetchProfile, registerWithGoogle, loginWithGoogle };

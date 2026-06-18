@@ -11,7 +11,6 @@ jest.mock('../src/config/prisma', () => ({
 
 const app = require('../src/app');
 const prisma = require('../src/config/prisma');
-const { signAccessToken } = require('../src/utils/jwt');
 
 const API_KEY = 'test-admin-key';
 const AUTH = `ApiKey ${API_KEY}`;
@@ -72,32 +71,5 @@ describe('POST /admin/members/:id/approve', () => {
       .set('Authorization', AUTH);
 
     expect(res.status).toBe(409);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// GET /auth/me
-// ---------------------------------------------------------------------------
-describe('GET /auth/me', () => {
-  const TOKEN = `Bearer ${signAccessToken(MEMBER_ID)}`;
-
-  it('200 — returns current member', async () => {
-    prisma.member.findUnique.mockResolvedValue(MEMBER);
-
-    const res = await request(app).get('/auth/me').set('Authorization', TOKEN);
-
-    expect(res.status).toBe(200);
-    expect(res.body.member.id).toBe(MEMBER_ID);
-    expect(res.body.member.password).toBeUndefined();
-  });
-
-  it('401 — missing token', async () => {
-    const res = await request(app).get('/auth/me');
-    expect(res.status).toBe(401);
-  });
-
-  it('401 — invalid token', async () => {
-    const res = await request(app).get('/auth/me').set('Authorization', 'Bearer bad.token.here');
-    expect(res.status).toBe(401);
   });
 });

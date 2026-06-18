@@ -5,6 +5,7 @@ const passkeyService = require('../services/passkey.service');
 const googleService = require('../services/google.service');
 const telegramService = require('../services/telegram.service');
 const memberService = require('../services/member.service');
+const oidcService = require('../services/oidc.service');
 const { isValidUsername } = require('../utils/username');
 const { signStateToken, verifyStateToken } = require('../utils/jwt');
 
@@ -35,7 +36,7 @@ async function login(req, res, next) {
       return res.status(400).json({ message: 'username and password are required' });
     }
 
-    const { accessToken, refreshToken } = await authService.login({ username, password });
+    const { accessToken, idToken, refreshToken } = await authService.login({ username, password });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -44,7 +45,7 @@ async function login(req, res, next) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken });
+    return res.json({ accessToken, idToken });
   } catch (err) {
     next(err);
   }
@@ -57,7 +58,7 @@ async function refresh(req, res, next) {
       return res.status(401).json({ message: 'Refresh token missing' });
     }
 
-    const { accessToken, refreshToken } = await authService.refresh(token);
+    const { accessToken, idToken, refreshToken } = await authService.refresh(token);
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -66,7 +67,7 @@ async function refresh(req, res, next) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken });
+    return res.json({ accessToken, idToken });
   } catch (err) {
     next(err);
   }
@@ -156,7 +157,7 @@ async function finishPasskeyLogin(req, res, next) {
       return res.status(400).json({ message: 'sessionId and credential are required' });
     }
 
-    const { accessToken, refreshToken } = await passkeyService.finishAuthentication({ sessionId, credential });
+    const { accessToken, idToken, refreshToken } = await passkeyService.finishAuthentication({ sessionId, credential });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -165,7 +166,7 @@ async function finishPasskeyLogin(req, res, next) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken });
+    return res.json({ accessToken, idToken });
   } catch (err) {
     next(err);
   }
@@ -218,7 +219,7 @@ async function handleGoogleCallback(req, res, next) {
       return res.status(201).json({ member });
     }
 
-    const { accessToken, refreshToken } = await googleService.loginWithGoogle({ profile });
+    const { accessToken, idToken, refreshToken } = await googleService.loginWithGoogle({ profile });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -227,7 +228,7 @@ async function handleGoogleCallback(req, res, next) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken });
+    return res.json({ accessToken, idToken });
   } catch (err) {
     next(err);
   }
@@ -260,7 +261,7 @@ async function loginWithTelegram(req, res, next) {
       return res.status(400).json({ message: 'telegramData is required' });
     }
 
-    const { accessToken, refreshToken } = await telegramService.loginWithTelegram({ telegramData });
+    const { accessToken, idToken, refreshToken } = await telegramService.loginWithTelegram({ telegramData });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -269,7 +270,7 @@ async function loginWithTelegram(req, res, next) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken });
+    return res.json({ accessToken, idToken });
   } catch (err) {
     next(err);
   }
@@ -278,7 +279,18 @@ async function loginWithTelegram(req, res, next) {
 async function me(req, res, next) {
   try {
     const member = await memberService.findById(req.memberId);
-    return res.json({ member });
+    // Flat object — `username` lets the client derive the email ({username}@domain).
+    return res.json(member);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// OIDC UserInfo endpoint — returns standard claims for the bearer's subject.
+async function userinfo(req, res, next) {
+  try {
+    const member = await memberService.findById(req.memberId);
+    return res.json(oidcService.getClaims(member));
   } catch (err) {
     next(err);
   }
@@ -300,4 +312,5 @@ module.exports = {
   registerWithTelegram,
   loginWithTelegram,
   me,
+  userinfo,
 };

@@ -19,6 +19,7 @@ router.post('/login/telegram', authController.loginWithTelegram);
 router.post('/login/passkey/start', authController.startPasskeyLogin);
 router.post('/login/passkey/finish', authController.finishPasskeyLogin);
 router.get('/me', authenticate, authController.me);
+router.get('/userinfo', authenticate, authController.userinfo);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 

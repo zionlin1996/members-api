@@ -32,10 +32,15 @@ yarn dev
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | Yes | — | Secret for signing access tokens |
-| `JWT_REFRESH_SECRET` | Yes | — | Secret for signing refresh tokens |
-| `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access token TTL |
+| `JWT_ACCESS_SECRET` | Yes | — | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC) |
+| `JWT_REFRESH_SECRET` | Yes | — | HS256 secret for signing refresh tokens |
+| `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access + ID token TTL |
 | `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh token TTL |
+| `OIDC_ISSUER` | No | `http://localhost:$PORT` | Public base URL of the API; `iss` claim + discovery base |
+| `OIDC_CLIENT_ID` | No | `members-web` | Audience (`aud`) of issued ID tokens |
+| `OIDC_PRIVATE_KEY` | Prod | _(ephemeral)_ | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only) |
+| `EMAIL_DOMAIN` | No | `yangfrenz.club` | Domain used to compute member emails for claims |
+| `CORS_ORIGIN` | No | `http://localhost:5173` | Comma-separated browser origins allowed credentialed requests |
 | `BCRYPT_ROUNDS` | No | `12` | bcrypt work factor |
 | `PORT` | No | `3000` | HTTP port |
 | `NODE_ENV` | No | `development` | Environment name |
@@ -147,20 +152,39 @@ GET /auth/google/callback  (Google redirects here)
 ```
 POST /auth/login/telegram
 { "telegramData": { ...Telegram widget data... } }
-→ { "accessToken": "..." }  +  refreshToken httpOnly cookie
+→ { "accessToken": "...", "idToken": "..." }  +  refreshToken httpOnly cookie
 ```
+
+All login endpoints (password, passkey, Google, Telegram) return `accessToken` (RS256) and `idToken` (OIDC) in the body, plus the refresh token in the httpOnly cookie.
 
 ### Token management
 
 ```
-POST /auth/refresh     — rotate refresh token (reads httpOnly cookie); returns new accessToken
+POST /auth/refresh     — rotate refresh token (reads httpOnly cookie); returns new accessToken + idToken
 POST /auth/logout      — invalidate refresh token
 GET  /auth/me          — return current member profile (requires Bearer token)
+GET  /auth/userinfo    — OIDC standard claims for the bearer (requires Bearer token)
 ```
 
-`GET /auth/me` response:
+`GET /auth/me` response — a flat member object (no wrapper). The email is not
+returned; derive it from `username` as `{username}@yangfrenz.club`:
 ```json
-{ "id": "...", "username": "yang.lin", "displayName": "Yang Lin", "email": "yang.lin@yangfrenz.club", "status": "UNVERIFIED" }
+{ "id": "...", "displayName": "Yang Lin", "username": "yang.lin", "status": "UNVERIFIED", "createdAt": "...", "updatedAt": "..." }
+```
+
+### OIDC
+
+This API issues OIDC-shaped tokens signed with an RS256 key it publishes (token issuer; no `/authorize` yet).
+
+```
+GET /.well-known/openid-configuration  — discovery document
+GET /.well-known/jwks.json             — public signing keys (JWKS)
+GET /auth/userinfo                     — standard claims (Bearer)
+```
+
+`GET /auth/userinfo` response:
+```json
+{ "sub": "<member-id>", "name": "Yang Lin", "preferred_username": "yang.lin", "email": "yang.lin@yangfrenz.club", "email_verified": true, "updated_at": 1700000000 }
 ```
 
 ### Members
@@ -171,8 +195,7 @@ All member routes require `Authorization: Bearer <accessToken>`.
 |---|---|---|
 | `GET` | `/members` | List all members |
 | `GET` | `/members/:id` | Get a member by ID |
-| `PATCH` | `/members/:id` | Update a member (`displayName`, `username`) |
-| `DELETE` | `/members/:id` | Delete a member |
+| `PATCH` | `/members/:id` | Update your own member (`displayName`, `username`) |
 
 ### Admin
 
@@ -194,8 +217,9 @@ GET /health → { "status": "ok" }
 
 ## Token strategy
 
-- **Access token** — short-lived (default 15m), sent as `Authorization: Bearer <token>`.
-- **Refresh token** — long-lived (default 7d), stored in the `RefreshToken` table and delivered as an httpOnly `refreshToken` cookie. Rotated on every `/auth/refresh` call.
+- **Access token** — short-lived (default 15m), **RS256** signed with the OIDC key, verifiable via the published JWKS. Sent as `Authorization: Bearer <token>`. Carries `iss` and `aud` (the API itself).
+- **ID token** — OIDC identity token (RS256), returned by login/refresh. `aud` is `OIDC_CLIENT_ID`. Carries standard profile claims.
+- **Refresh token** — long-lived (default 7d), HS256, stored in the `RefreshToken` table and delivered as an httpOnly `refreshToken` cookie. Rotated on every `/auth/refresh` call.
 
 ## Scripts
 

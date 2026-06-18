@@ -9,6 +9,7 @@ const {
 const prisma = require('../config/prisma');
 const env = require('../config/env');
 const { signAccessToken, signRefreshToken, refreshTokenExpiresAt } = require('../utils/jwt');
+const { issueIdToken } = require('./oidc.service');
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -218,13 +219,14 @@ async function finishAuthentication({ sessionId, credential }) {
   });
 
   const accessToken = signAccessToken(storedCred.member.id);
+  const idToken = await issueIdToken(storedCred.member.id);
   const refreshToken = signRefreshToken(storedCred.member.id);
 
   await prisma.refreshToken.create({
     data: { token: refreshToken, memberId: storedCred.member.id, expiresAt: refreshTokenExpiresAt() },
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, idToken, refreshToken };
 }
 
 module.exports = { startRegistration, finishRegistration, startAuthentication, finishAuthentication };

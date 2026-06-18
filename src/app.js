@@ -8,6 +8,7 @@ const env = require('./config/env');
 const authRoutes = require('./routes/auth.routes');
 const memberRoutes = require('./routes/member.routes');
 const adminRoutes = require('./routes/admin.routes');
+const oidcRoutes = require('./routes/oidc.routes');
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -26,6 +27,7 @@ app.use(cookieParser());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+app.use('/.well-known', oidcRoutes);
 app.use('/auth', authRoutes);
 app.use('/members', memberRoutes);
 app.use('/admin', adminRoutes);

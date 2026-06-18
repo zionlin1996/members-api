@@ -22,7 +22,7 @@ jest.mock('../src/config/prisma', () => ({
 
 const app = require('../src/app');
 const prisma = require('../src/config/prisma');
-const { signRefreshToken } = require('../src/utils/jwt');
+const { signRefreshToken, signAccessToken } = require('../src/utils/jwt');
 
 const MEMBER_ID = 'member-uuid-1';
 
@@ -305,5 +305,34 @@ describe('GET /auth/availability', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.username).toEqual({ available: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /auth/me
+// ---------------------------------------------------------------------------
+describe('GET /auth/me', () => {
+  const TOKEN = `Bearer ${signAccessToken(MEMBER_ID)}`;
+
+  it('200 — returns a flat member object (no wrapper)', async () => {
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
+
+    const res = await request(app).get('/auth/me').set('Authorization', TOKEN);
+
+    expect(res.status).toBe(200);
+    expect(res.body.member).toBeUndefined(); // flat, not { member: {...} }
+    expect(res.body.id).toBe(MEMBER_ID);
+    expect(res.body.username).toBe('testuser');
+    expect(res.body.password).toBeUndefined();
+  });
+
+  it('401 — missing Authorization header', async () => {
+    const res = await request(app).get('/auth/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('401 — invalid token', async () => {
+    const res = await request(app).get('/auth/me').set('Authorization', 'Bearer bad.token.here');
+    expect(res.status).toBe(401);
   });
 });

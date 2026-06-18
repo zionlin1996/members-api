@@ -48,6 +48,7 @@ const MEMBER = {
   username: 'testuser',
   status: 'ACTIVE',
   createdAt: new Date('2024-01-01'),
+  updatedAt: new Date('2024-01-01'),
 };
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,8 @@ describe('POST /auth/login/telegram', () => {
       id: 'cred-id',
       member: { id: 'member-uuid-1', status: 'ACTIVE' },
     });
+    // ID-token issuance reads the member back via findById
+    prisma.member.findUnique.mockResolvedValue(MEMBER);
     prisma.refreshToken.create.mockResolvedValue({});
 
     const res = await request(app).post('/auth/login/telegram').send({
@@ -150,6 +153,7 @@ describe('POST /auth/login/telegram', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeDefined();
+    expect(res.body.idToken).toBeDefined();
     expect(res.headers['set-cookie'][0]).toMatch(/refreshToken=/);
     expect(res.headers['set-cookie'][0]).toMatch(/HttpOnly/i);
   });

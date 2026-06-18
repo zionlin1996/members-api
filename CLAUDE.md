@@ -104,3 +104,14 @@ Registration is two-step from the UX perspective:
 Each registration endpoint creates one `Member` (status `UNVERIFIED`) and one `Credential` of the matching type. Login endpoints look up the `Credential` first, then the `Member`.
 
 WebAuthn ceremonies are stateless between requests — the challenge is stored in `PendingChallenge` with a 5-minute TTL. The `sessionId` returned by `/start` endpoints is the `PendingChallenge.id`.
+
+## OIDC issuer
+
+This API is an OIDC **token issuer** (not yet a full authorization server — there is no `/authorize`/`/token`). It mints tokens through its own login endpoints and publishes the means to verify them.
+
+- **Token signing**: access tokens and ID tokens are **RS256**, signed with the OIDC key pair (`src/utils/oidcKeys.js`). Refresh tokens and OAuth state tokens stay **HS256** (internal, never externally verified). The signing key comes from `OIDC_PRIVATE_KEY` (PEM or base64 PEM); if unset, an ephemeral key is generated at boot (dev only).
+- **`kid`** is the RFC 7638 JWK thumbprint — stable for a given key, so it survives a future migration to a full authorization server.
+- **Login/refresh responses** now include `idToken` alongside `accessToken` (the refresh token stays in the httpOnly cookie). Registration endpoints issue no tokens.
+- **Claims** are defined once in `oidc.service.getClaims()` — the single source of truth for ID-token and `/userinfo` claims. `sub` is the **immutable `Member.id`** (never `username`, which can change). `email` is computed as `{username}@EMAIL_DOMAIN`.
+- **Endpoints**: `GET /.well-known/openid-configuration` (discovery), `GET /.well-known/jwks.json` (public keys), `GET /auth/userinfo` (Bearer-authenticated standard claims).
+- **`auth.middleware`** verifies access tokens with the OIDC public key (RS256), checking `iss` and `aud`.

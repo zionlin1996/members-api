@@ -9,6 +9,7 @@ const {
   verifyRefreshToken,
   refreshTokenExpiresAt,
 } = require('../utils/jwt');
+const { issueIdToken } = require('./oidc.service');
 
 const REGISTER_SELECT = {
   id: true,
@@ -69,13 +70,14 @@ async function login({ username, password }) {
   }
 
   const accessToken = signAccessToken(member.id);
+  const idToken = await issueIdToken(member.id);
   const refreshToken = signRefreshToken(member.id);
 
   await prisma.refreshToken.create({
     data: { token: refreshToken, memberId: member.id, expiresAt: refreshTokenExpiresAt() },
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, idToken, refreshToken };
 }
 
 async function refresh(token) {
@@ -103,7 +105,8 @@ async function refresh(token) {
   });
 
   const accessToken = signAccessToken(payload.sub);
-  return { accessToken, refreshToken: newRefreshToken };
+  const idToken = await issueIdToken(payload.sub);
+  return { accessToken, idToken, refreshToken: newRefreshToken };
 }
 
 async function logout(token) {

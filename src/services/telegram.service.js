@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const prisma = require('../config/prisma');
 const env = require('../config/env');
 const { signAccessToken, signRefreshToken, refreshTokenExpiresAt } = require('../utils/jwt');
+const { issueIdToken } = require('./oidc.service');
 
 const MAX_AUTH_AGE_SECONDS = 86400; // 24 hours
 
@@ -113,13 +114,14 @@ async function loginWithTelegram({ telegramData }) {
   }
 
   const accessToken = signAccessToken(cred.member.id);
+  const idToken = await issueIdToken(cred.member.id);
   const refreshToken = signRefreshToken(cred.member.id);
 
   await prisma.refreshToken.create({
     data: { token: refreshToken, memberId: cred.member.id, expiresAt: refreshTokenExpiresAt() },
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, idToken, refreshToken };
 }
 
 module.exports = { verifyTelegramData, registerWithTelegram, loginWithTelegram };
