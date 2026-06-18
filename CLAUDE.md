@@ -53,6 +53,7 @@ prisma/
 - **Access tokens**: short-lived Bearer tokens, verified in `auth.middleware.js`.
 - **No controller-level Prisma**: all Prisma access must go through service files.
 - **Env vars**: always add new env vars to both `src/config/env.js` (with validation) and `.env.example`.
+- **Domain topology**: public hostnames are derived in `env.js` from three base vars — `DOMAIN`, `API_SUBDOMAIN`, `APP_SUBDOMAIN`. `CORS_ORIGIN`/`WEBAUTHN_ORIGIN` = `https://{APP_SUBDOMAIN}.{DOMAIN}`, `OIDC_ISSUER` = `https://{API_SUBDOMAIN}.{DOMAIN}`, `OIDC_CLIENT_ID` = `{APP_SUBDOMAIN}.{DOMAIN}`, `WEBAUTHN_RP_ID`/`EMAIL_DOMAIN` = `{DOMAIN}`. Production sets only the three base vars; each derived value stays overridable for local dev (where http/localhost/ports can't be derived).
 
 ## Running Locally
 

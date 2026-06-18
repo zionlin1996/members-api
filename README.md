@@ -29,27 +29,32 @@ yarn dev
 
 ## Environment Variables
 
+All public hostnames are **derived from three base variables**, so production only configures `DOMAIN`, `API_SUBDOMAIN`, and `APP_SUBDOMAIN`. Every domain-shaped value (CORS origin, WebAuthn RP/origin, OIDC issuer/audience, email domain) is computed from them — each still overridable by its own env var, which is required for local dev (http + localhost + ports can't be derived from a domain).
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
+| `DOMAIN` | No | `yangfrenz.club` | Root domain; base for all derived hostnames |
+| `API_SUBDOMAIN` | No | `members-api` | API host = `{API_SUBDOMAIN}.{DOMAIN}` |
+| `APP_SUBDOMAIN` | No | `members` | App (SPA) host = `{APP_SUBDOMAIN}.{DOMAIN}` |
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `JWT_ACCESS_SECRET` | Yes | — | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC) |
 | `JWT_REFRESH_SECRET` | Yes | — | HS256 secret for signing refresh tokens |
 | `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access + ID token TTL |
 | `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh token TTL |
-| `OIDC_ISSUER` | No | `http://localhost:$PORT` | Public base URL of the API; `iss` claim + discovery base |
-| `OIDC_CLIENT_ID` | No | `members-web` | Audience (`aud`) of issued ID tokens |
 | `OIDC_PRIVATE_KEY` | Prod | _(ephemeral)_ | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only) |
-| `EMAIL_DOMAIN` | No | `yangfrenz.club` | Domain used to compute member emails for claims |
-| `CORS_ORIGIN` | No | `http://localhost:5173` | Comma-separated browser origins allowed credentialed requests |
+| `OIDC_ISSUER` | Derived | `https://{API_SUBDOMAIN}.{DOMAIN}` | Public base URL of the API; `iss` claim + discovery base. Override in dev → `http://localhost:3000` |
+| `OIDC_CLIENT_ID` | Derived | `{APP_SUBDOMAIN}.{DOMAIN}` | Audience (`aud`) of issued ID tokens |
+| `EMAIL_DOMAIN` | Derived | `{DOMAIN}` | Domain used to compute member emails for claims |
+| `CORS_ORIGIN` | Derived | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Comma-separated browser origins allowed credentialed requests. Override in dev |
+| `WEBAUTHN_RP_ID` | Derived | `{DOMAIN}` | Relying party domain — must match the browser-visible domain. Override in dev → `localhost` |
+| `WEBAUTHN_ORIGIN` | Derived | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Full app origin with protocol. Override in dev |
+| `WEBAUTHN_RP_NAME` | Passkey | — | Human-readable app name shown by authenticators (e.g. `YangFrenz`) |
 | `BCRYPT_ROUNDS` | No | `12` | bcrypt work factor |
 | `PORT` | No | `3000` | HTTP port |
 | `NODE_ENV` | No | `development` | Environment name |
-| `WEBAUTHN_RP_ID` | Passkey | — | Relying party domain (e.g. `yangfrenz.club`) — must match the browser-visible domain exactly |
-| `WEBAUTHN_RP_NAME` | Passkey | — | Human-readable app name shown by authenticators (e.g. `YangFrenz`) |
-| `WEBAUTHN_ORIGIN` | Passkey | — | Full origin with protocol (e.g. `https://yangfrenz.club`) |
 | `GOOGLE_CLIENT_ID` | Google | — | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google | — | Google OAuth client secret |
-| `GOOGLE_CALLBACK_URL` | Google | — | Full OAuth callback URL (e.g. `https://yangfrenz.club/api/auth/google/callback`) |
+| `GOOGLE_CALLBACK_URL` | Google | — | Full OAuth callback URL (must match the Google console exactly; not auto-derived) |
 | `TELEGRAM_BOT_TOKEN` | Telegram | — | Telegram bot token for HMAC widget verification |
 | `ADMIN_API_KEY` | Admin | — | Secret key protecting the admin approval endpoint |
 

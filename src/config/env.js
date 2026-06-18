@@ -8,13 +8,31 @@ const required = (key) => {
   return value;
 };
 
+// ── Domain topology ──────────────────────────────────────────────────────────
+// All public hostnames are derived from three base vars, so production only
+// configures these three. Everything domain-shaped below (CORS origin, WebAuthn
+// RP, OIDC issuer/audience, email domain) is derived from them. Each derived
+// value can still be overridden by its own env var — needed for local dev, where
+// the app/API run on http://localhost with ports that aren't derivable.
+const DOMAIN = process.env.DOMAIN || 'yangfrenz.club';
+const API_SUBDOMAIN = process.env.API_SUBDOMAIN || 'members-api';
+const APP_SUBDOMAIN = process.env.APP_SUBDOMAIN || 'members';
+
+const APP_HOST = `${APP_SUBDOMAIN}.${DOMAIN}`; // members.yangfrenz.club
+const APP_ORIGIN = `https://${APP_HOST}`; // https://members.yangfrenz.club
+const API_ORIGIN = `https://${API_SUBDOMAIN}.${DOMAIN}`; // https://members-api.yangfrenz.club
+
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: parseInt(process.env.PORT || '3000', 10),
 
-  // Comma-separated list of browser origins allowed to make credentialed
-  // (cookie-bearing) requests. Defaults to the local Vite dev server.
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  DOMAIN,
+  APP_ORIGIN,
+  API_ORIGIN,
+
+  // Browser origins allowed to make credentialed (cookie-bearing) requests.
+  // Derived from APP_SUBDOMAIN.DOMAIN; comma-separated if multiple.
+  CORS_ORIGIN: process.env.CORS_ORIGIN || APP_ORIGIN,
 
   DATABASE_URL: required('DATABASE_URL'),
 
@@ -25,19 +43,21 @@ module.exports = {
 
   BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
 
-  WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || '',
+  // RP ID is the registrable domain (no scheme); origin is the app origin.
+  WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || DOMAIN,
   WEBAUTHN_RP_NAME: process.env.WEBAUTHN_RP_NAME || '',
-  WEBAUTHN_ORIGIN: process.env.WEBAUTHN_ORIGIN || '',
+  WEBAUTHN_ORIGIN: process.env.WEBAUTHN_ORIGIN || APP_ORIGIN,
 
-  // OIDC issuer (this API). OIDC_ISSUER must be the public base URL of the API
-  // and appears as `iss` in tokens + the discovery doc. OIDC_PRIVATE_KEY is a
-  // PEM (optionally base64-encoded) RSA private key; if unset, an ephemeral key
-  // is generated at boot (dev only). OIDC_CLIENT_ID is the audience of ID tokens.
-  OIDC_ISSUER: process.env.OIDC_ISSUER || `http://localhost:${process.env.PORT || '3000'}`,
-  OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID || 'members-web',
+  // OIDC issuer (this API). OIDC_ISSUER is the public base URL of the API and
+  // appears as `iss` in tokens + the discovery doc (derived: API_SUBDOMAIN.DOMAIN).
+  // OIDC_CLIENT_ID is the audience of ID tokens (derived: the app host).
+  // OIDC_PRIVATE_KEY is a PEM (optionally base64) RSA key; if unset, an ephemeral
+  // key is generated at boot (dev only).
+  OIDC_ISSUER: process.env.OIDC_ISSUER || API_ORIGIN,
+  OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID || APP_HOST,
   OIDC_PRIVATE_KEY: process.env.OIDC_PRIVATE_KEY || '',
   // Domain used to compute member emails ({username}@EMAIL_DOMAIN) for claims.
-  EMAIL_DOMAIN: process.env.EMAIL_DOMAIN || 'yangfrenz.club',
+  EMAIL_DOMAIN: process.env.EMAIL_DOMAIN || DOMAIN,
 
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
