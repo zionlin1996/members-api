@@ -12,6 +12,10 @@ module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: parseInt(process.env.PORT || '3000', 10),
 
+  // Comma-separated list of browser origins allowed to make credentialed
+  // (cookie-bearing) requests. Defaults to the local Vite dev server.
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+
   DATABASE_URL: required('DATABASE_URL'),
 
   JWT_ACCESS_SECRET: required('JWT_ACCESS_SECRET'),
