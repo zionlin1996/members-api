@@ -28,6 +28,12 @@ describe('profile.service.findByMemberId', () => {
     expect(p.phoneVerified).toBe(false)
     expect(prisma.profile.upsert).not.toHaveBeenCalled()
   })
+
+  it('renders birthdate as YYYY-MM-DD', async () => {
+    prisma.profile.findUnique.mockResolvedValue({ birthdate: new Date('1990-05-20T00:00:00.000Z') })
+    const p = await profileService.findByMemberId(MEMBER_ID)
+    expect(p.birthdate).toBe('1990-05-20')
+  })
 })
 
 describe('profile.service.update', () => {

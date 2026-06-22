@@ -34,12 +34,21 @@ const BLANK_PROFILE = Object.fromEntries(
   Object.keys(PROFILE_SELECT).map((k) => [k, k === 'phoneVerified' ? false : null]),
 )
 
+// Render birthdate as a plain YYYY-MM-DD string (it's a DB DateTime) for a
+// friendlier read shape; everything else passes through untouched.
+function serialize(profile) {
+  if (profile.birthdate instanceof Date) {
+    return { ...profile, birthdate: profile.birthdate.toISOString().slice(0, 10) }
+  }
+  return profile
+}
+
 async function findByMemberId(memberId) {
   const profile = await prisma.profile.findUnique({
     where: { memberId },
     select: PROFILE_SELECT,
   })
-  return profile ?? { ...BLANK_PROFILE }
+  return serialize(profile ?? { ...BLANK_PROFILE })
 }
 
 // Whitelist + normalize the payload into Prisma-ready field values.
@@ -77,12 +86,13 @@ async function update(memberId, data) {
   }
 
   // Upsert: the Profile row is created lazily on first write.
-  return prisma.profile.upsert({
+  const profile = await prisma.profile.upsert({
     where: { memberId },
     create: { memberId, ...fields },
     update: fields,
     select: PROFILE_SELECT,
   })
+  return serialize(profile)
 }
 
 module.exports = { findByMemberId, update, PROFILE_SELECT }

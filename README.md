@@ -31,38 +31,39 @@ yarn dev
 
 All public hostnames are **derived from three base variables**, so production only configures `DOMAIN`, `API_SUBDOMAIN`, and `APP_SUBDOMAIN`. Every domain-shaped value (CORS origin, WebAuthn RP/origin, OIDC issuer/audience, email domain) is computed from them — each still overridable by its own env var, which is required for local dev (http + localhost + ports can't be derived from a domain).
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DOMAIN` | No | `yangfrenz.club` | Root domain; base for all derived hostnames |
-| `API_SUBDOMAIN` | No | `members-api` | API host = `{API_SUBDOMAIN}.{DOMAIN}` |
-| `APP_SUBDOMAIN` | No | `members` | App (SPA) host = `{APP_SUBDOMAIN}.{DOMAIN}` |
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | Yes | — | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC) |
-| `JWT_REFRESH_SECRET` | Yes | — | HS256 secret for signing refresh tokens |
-| `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access + ID token TTL |
-| `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh token TTL |
-| `OIDC_PRIVATE_KEY` | Prod | _(ephemeral)_ | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only) |
-| `OIDC_ISSUER` | Derived | `https://{API_SUBDOMAIN}.{DOMAIN}` | Public base URL of the API; `iss` claim + discovery base. Override in dev → `http://localhost:3000` |
-| `OIDC_CLIENT_ID` | Derived | `{APP_SUBDOMAIN}.{DOMAIN}` | Audience (`aud`) of issued ID tokens |
-| `EMAIL_DOMAIN` | Derived | `{DOMAIN}` | Domain used to compute member emails for claims |
-| `CORS_ORIGIN` | Derived | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Comma-separated browser origins allowed credentialed requests. Override in dev |
-| `WEBAUTHN_RP_ID` | Derived | `{DOMAIN}` | Relying party domain — must match the browser-visible domain. Override in dev → `localhost` |
-| `WEBAUTHN_ORIGIN` | Derived | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Full app origin with protocol. Override in dev |
-| `WEBAUTHN_RP_NAME` | Passkey | — | Human-readable app name shown by authenticators (e.g. `YangFrenz`) |
-| `BCRYPT_ROUNDS` | No | `12` | bcrypt work factor |
-| `PORT` | No | `3000` | HTTP port |
-| `NODE_ENV` | No | `development` | Environment name |
-| `GOOGLE_CLIENT_ID` | Google | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google | — | Google OAuth client secret |
-| `GOOGLE_CALLBACK_URL` | Google | — | Full OAuth callback URL (must match the Google console exactly; not auto-derived) |
-| `TELEGRAM_BOT_TOKEN` | Telegram | — | Telegram bot token for HMAC widget verification |
-| `ADMIN_API_KEY` | Admin | — | Secret key protecting the admin approval endpoint |
+| Variable                 | Required | Default                            | Description                                                                                            |
+| ------------------------ | -------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `DOMAIN`                 | No       | `yangfrenz.club`                   | Root domain; base for all derived hostnames                                                            |
+| `API_SUBDOMAIN`          | No       | `members-api`                      | API host = `{API_SUBDOMAIN}.{DOMAIN}`                                                                  |
+| `APP_SUBDOMAIN`          | No       | `members`                          | App (SPA) host = `{APP_SUBDOMAIN}.{DOMAIN}`                                                            |
+| `DATABASE_URL`           | Yes      | —                                  | PostgreSQL connection string                                                                           |
+| `JWT_ACCESS_SECRET`      | Yes      | —                                  | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC)                           |
+| `JWT_REFRESH_SECRET`     | Yes      | —                                  | HS256 secret for signing refresh tokens                                                                |
+| `JWT_ACCESS_EXPIRES_IN`  | No       | `15m`                              | Access + ID token TTL                                                                                  |
+| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                               | Refresh token TTL                                                                                      |
+| `OIDC_PRIVATE_KEY`       | Prod     | _(ephemeral)_                      | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only) |
+| `OIDC_ISSUER`            | Derived  | `https://{API_SUBDOMAIN}.{DOMAIN}` | Public base URL of the API; `iss` claim + discovery base. Override in dev → `http://localhost:3000`    |
+| `OIDC_CLIENT_ID`         | Derived  | `{APP_SUBDOMAIN}.{DOMAIN}`         | Audience (`aud`) of issued ID tokens                                                                   |
+| `EMAIL_DOMAIN`           | Derived  | `{DOMAIN}`                         | Domain used to compute member emails for claims                                                        |
+| `CORS_ORIGIN`            | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Comma-separated browser origins allowed credentialed requests. Override in dev                         |
+| `WEBAUTHN_RP_ID`         | Derived  | `{DOMAIN}`                         | Relying party domain — must match the browser-visible domain. Override in dev → `localhost`            |
+| `WEBAUTHN_ORIGIN`        | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Full app origin with protocol. Override in dev                                                         |
+| `WEBAUTHN_RP_NAME`       | Passkey  | —                                  | Human-readable app name shown by authenticators (e.g. `YangFrenz`)                                     |
+| `BCRYPT_ROUNDS`          | No       | `12`                               | bcrypt work factor                                                                                     |
+| `PORT`                   | No       | `3000`                             | HTTP port                                                                                              |
+| `NODE_ENV`               | No       | `development`                      | Environment name                                                                                       |
+| `GOOGLE_CLIENT_ID`       | Google   | —                                  | Google OAuth client ID                                                                                 |
+| `GOOGLE_CLIENT_SECRET`   | Google   | —                                  | Google OAuth client secret                                                                             |
+| `GOOGLE_CALLBACK_URL`    | Google   | —                                  | Full OAuth callback URL (must match the Google console exactly; not auto-derived)                      |
+| `TELEGRAM_BOT_TOKEN`     | Telegram | —                                  | Telegram bot token for HMAC widget verification                                                        |
+| `ADMIN_API_KEY`          | Admin    | —                                  | Secret key protecting the admin approval endpoint                                                      |
 
 ## API
 
 ### Registration flow
 
 Registration is a two-step UX:
+
 1. User enters a display name → frontend derives `username` (e.g. `yang.lin`) — no API call needed.
 2. User picks an auth method and submits. The account is created with status `UNVERIFIED`.
 
@@ -75,6 +76,7 @@ GET /auth/availability?username=yang.lin
 ```
 
 Response:
+
 ```json
 { "username": { "available": true } }
 ```
@@ -173,9 +175,28 @@ GET  /auth/userinfo    — OIDC standard claims for the bearer (requires Bearer 
 
 `GET /auth/me` response — a flat member object (no wrapper). The email is not
 returned; derive it from `username` as `{username}@yangfrenz.club`:
+
 ```json
-{ "id": "...", "displayName": "Yang Lin", "username": "yang.lin", "status": "UNVERIFIED", "createdAt": "...", "updatedAt": "..." }
+{
+  "id": "...",
+  "displayName": "Yang Lin",
+  "username": "yang.lin",
+  "status": "UNVERIFIED",
+  "createdAt": "...",
+  "updatedAt": "..."
+}
 ```
+
+### Profile (self-service)
+
+Extended profile fields, modeled on OIDC standard claims. Both require a Bearer token and operate on the **current member** (no `:id`):
+
+```
+GET   /auth/me/profile   — current member's profile (flat; all-null if not yet set)
+PATCH /auth/me/profile   — update own profile (partial; send only changed fields)
+```
+
+Updatable fields: `givenName, familyName, middleName, nickname, birthdate (YYYY-MM-DD), gender, pronouns, locale (BCP-47), zoneinfo (IANA tz), picture, website, profileUrl, phoneNumber (E.164), streetAddress, locality, region, postalCode, country (ISO 3166-1 alpha-2)`. Send `null`/`""` to clear a field. `phoneVerified` and timestamps are system-managed. Invalid fields return `400`.
 
 ### OIDC
 
@@ -188,18 +209,26 @@ GET /auth/userinfo                     — standard claims (Bearer)
 ```
 
 `GET /auth/userinfo` response:
+
 ```json
-{ "sub": "<member-id>", "name": "Yang Lin", "preferred_username": "yang.lin", "email": "yang.lin@yangfrenz.club", "email_verified": true, "updated_at": 1700000000 }
+{
+  "sub": "<member-id>",
+  "name": "Yang Lin",
+  "preferred_username": "yang.lin",
+  "email": "yang.lin@yangfrenz.club",
+  "email_verified": true,
+  "updated_at": 1700000000
+}
 ```
 
 ### Members
 
 All member routes require `Authorization: Bearer <accessToken>`.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/members` | List all members |
-| `GET` | `/members/:id` | Get a member by ID |
+| Method  | Path           | Description                                        |
+| ------- | -------------- | -------------------------------------------------- |
+| `GET`   | `/members`     | List all members                                   |
+| `GET`   | `/members/:id` | Get a member by ID                                 |
 | `PATCH` | `/members/:id` | Update your own member (`displayName`, `username`) |
 
 ### Admin
@@ -211,6 +240,7 @@ POST /admin/members/:id/approve
 ```
 
 Sets member `status` from `UNVERIFIED` → `ACTIVE`. Includes placeholder hooks for:
+
 - ProtonMail mailbox creation (`username@yangfrenz.club`)
 - Recovery phrase delivery (to `meta.backupEmail` for password/passkey flows)
 
@@ -228,22 +258,23 @@ GET /health → { "status": "ok" }
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `yarn dev` | Start with nodemon (hot reload) |
-| `yarn start` | Start without hot reload |
-| `yarn test` | Run Jest test suite |
-| `yarn db:migrate` | Run Prisma migrations (dev) |
-| `yarn db:migrate:prod` | Deploy migrations (production) |
-| `yarn db:push` | Push schema without migration |
-| `yarn db:generate` | Regenerate Prisma client |
-| `yarn db:studio` | Open Prisma Studio |
+| Command                | Description                     |
+| ---------------------- | ------------------------------- |
+| `yarn dev`             | Start with nodemon (hot reload) |
+| `yarn start`           | Start without hot reload        |
+| `yarn test`            | Run Jest test suite             |
+| `yarn db:migrate`      | Run Prisma migrations (dev)     |
+| `yarn db:migrate:prod` | Deploy migrations (production)  |
+| `yarn db:push`         | Push schema without migration   |
+| `yarn db:generate`     | Regenerate Prisma client        |
+| `yarn db:studio`       | Open Prisma Studio              |
 
 ## Deployment (CapRover)
 
 The project includes a `captain-definition` and `Dockerfile` for CapRover deployment.
 
 **Container startup flow:**
+
 1. `scripts/start.sh` runs on container start
 2. `scripts/setup-db.js` runs `prisma generate` + `prisma migrate deploy` (falls back to `db push` if no migrations exist)
 3. App starts via `yarn start`
