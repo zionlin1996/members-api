@@ -19,7 +19,9 @@ const API_SUBDOMAIN = process.env.API_SUBDOMAIN || 'members-api'
 const APP_SUBDOMAIN = process.env.APP_SUBDOMAIN || 'members'
 
 const APP_HOST = `${APP_SUBDOMAIN}.${DOMAIN}` // members.yangfrenz.club
-const APP_ORIGIN = `https://${APP_HOST}` // https://members.yangfrenz.club
+// SPA origin — also where the OIDC AS redirects for login/consent. Overridable
+// for dev (the SPA runs on http://localhost:5173, which isn't derivable).
+const APP_ORIGIN = process.env.APP_ORIGIN || `https://${APP_HOST}`
 const API_ORIGIN = `https://${API_SUBDOMAIN}.${DOMAIN}` // https://members-api.yangfrenz.club
 
 module.exports = {
