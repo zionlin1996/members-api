@@ -3,7 +3,7 @@
 const { Router } = require('express')
 const authController = require('../controllers/auth.controller')
 const profileController = require('../controllers/profile.controller')
-const { authenticate } = require('../middleware/auth.middleware')
+const { authenticate, requireActive } = require('../middleware/auth.middleware')
 
 const router = Router()
 
@@ -20,9 +20,10 @@ router.post('/login/telegram', authController.loginWithTelegram)
 router.post('/login/passkey/start', authController.startPasskeyLogin)
 router.post('/login/passkey/finish', authController.finishPasskeyLogin)
 router.get('/me', authenticate, authController.me)
-router.get('/me/profile', authenticate, profileController.getProfile)
+// Profile detail getters are ACTIVE-only; PATCH stays open pending product decision.
+router.get('/me/profile', authenticate, requireActive, profileController.getProfile)
 router.patch('/me/profile', authenticate, profileController.updateProfile)
-router.get('/userinfo', authenticate, authController.userinfo)
+router.get('/userinfo', authenticate, requireActive, authController.userinfo)
 router.post('/refresh', authController.refresh)
 router.post('/logout', authController.logout)
 

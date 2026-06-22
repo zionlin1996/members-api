@@ -2,7 +2,7 @@
 
 REST API for member management with multi-method authentication. Built with Node.js, Express, Prisma, and PostgreSQL.
 
-Members register with one of four auth methods (password, passkey/WebAuthn, Google OAuth, Telegram OAuth). New accounts start as `UNVERIFIED` and require admin approval before they can log in.
+Members register with one of four auth methods (password, passkey/WebAuthn, Google OAuth, Telegram OAuth). New accounts start as `UNVERIFIED`: they can log in but get a limited session (no profile details) until an admin approves them. See [Member status & limited session](#member-status--limited-session).
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ POST /auth/login
 → { "accessToken": "..." }  +  refreshToken httpOnly cookie
 ```
 
-Returns `403` if the account is `UNVERIFIED`.
+Returns `403` only if the account is `SUSPENDED`. `UNVERIFIED` members **may** log in and receive a session, but it is limited — the profile-detail getters (`GET /auth/me/profile`, `GET /auth/userinfo`) return `403` until an admin approves the account. See [Member status & limited session](#member-status--limited-session).
 
 #### Passkey (WebAuthn)
 
@@ -197,6 +197,16 @@ PATCH /auth/me/profile   — update own profile (partial; send only changed fiel
 ```
 
 Updatable fields: `givenName, familyName, middleName, nickname, birthdate (YYYY-MM-DD), gender, pronouns, locale (BCP-47), zoneinfo (IANA tz), picture, website, profileUrl, phoneNumber (E.164), streetAddress, locality, region, postalCode, country (ISO 3166-1 alpha-2)`. Send `null`/`""` to clear a field. `phoneVerified` and timestamps are system-managed. Invalid fields return `400`.
+
+`GET /auth/me/profile` returns `403 {"message":"Account pending approval"}` for non-`ACTIVE` members (see [Member status & limited session](#member-status--limited-session)). `PATCH` is not status-gated.
+
+### Member status & limited session
+
+A member's `status` is `UNVERIFIED | ACTIVE | SUSPENDED`.
+
+- **`UNVERIFIED`** (new accounts): may log in and hold a session, but profile-detail getters are blocked. A `requireActive` middleware (`src/middleware/auth.middleware.js`) gates `GET /auth/me/profile` and `GET /auth/userinfo`, returning `403 {"message":"Account pending approval"}`. `GET /auth/me` stays open so clients can read `status` and show a pending-approval view.
+- **`ACTIVE`** (admin-approved via `POST /admin/members/:id/approve`): full access.
+- **`SUSPENDED`**: denied at login with `403 {"message":"Account suspended"}` across all four auth methods.
 
 ### OIDC
 

@@ -63,6 +63,21 @@ describe('GET /auth/userinfo', () => {
     expect(res.body.given_name).toBeUndefined()
   })
 
+  it('403 — UNVERIFIED member cannot read userinfo', async () => {
+    prisma.member.findUnique.mockResolvedValue({
+      id: MEMBER_ID,
+      displayName: 'Yang Lin',
+      username: 'yang.lin',
+      status: 'UNVERIFIED',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-06-01T00:00:00.000Z'),
+    })
+
+    const res = await request(app).get('/auth/userinfo').set('Authorization', TOKEN)
+
+    expect(res.status).toBe(403)
+  })
+
   it('401 — without a token', async () => {
     const res = await request(app).get('/auth/userinfo')
     expect(res.status).toBe(401)

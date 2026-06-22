@@ -45,7 +45,7 @@ prisma/
 - **Credential model**: all auth methods store secrets and provider-specific data in `Credential.meta` (Json). Only `credentialId` (passkey lookup) and `providerId` (OAuth lookup) are first-class columns — they need indexed queries during authentication. Everything else (passwordHash, publicKey, backupEmail, etc.) lives in `meta`.
 - **Username = email local-part**: `username` is the sole unique identifier. The member email is always `{username}@yangfrenz.club` — never stored, always computed. Validate with `isValidUsername()` at all registration, availability, and update endpoints.
 - **backupEmail**: required in `Credential.meta` for `PASSWORD` and `PASSKEY` flows (recovery channel). Absent for `GOOGLE` and `TELEGRAM` (recovery goes through the provider).
-- **Member status**: new members are `UNVERIFIED`. Login returns `403` until an admin calls `POST /admin/members/:id/approve` to set status to `ACTIVE`.
+- **Member status** (`UNVERIFIED | ACTIVE | SUSPENDED`): new members are `UNVERIFIED` and **can log in**, but the `requireActive` middleware (`auth.middleware.js`) gates profile-detail getters (`GET /auth/me/profile`, `GET /auth/userinfo`) with `403 {message:'Account pending approval'}` until an admin calls `POST /admin/members/:id/approve` (→ `ACTIVE`). `GET /auth/me` stays open. Only `SUSPENDED` is rejected at login (`403 'Account suspended'`, enforced in each login service). `PATCH /auth/me/profile` is intentionally not status-gated (pending product decision).
 - **Admin auth**: `Authorization: ApiKey <ADMIN_API_KEY>` header, checked by `requireApiKey()` middleware. Admin routes are not member accounts.
 - **Password handling**: always hash with bcryptjs before writing; never return `passwordHash` or any credential secret from any API response. Use `SAFE_SELECT` in member service for all queries.
 - **Error propagation**: throw errors with a `.status` property from services; the global error handler in `error.middleware.js` maps `.status` to HTTP status codes.
@@ -80,10 +80,12 @@ Only use `yarn db:push` for quick prototyping — it skips migration history.
 Deployed via CapRover using `captain-definition` + `Dockerfile`.
 
 **Container startup sequence** (`scripts/start.sh`):
+
 1. `node scripts/setup-db.js` — generates Prisma client + runs `prisma migrate deploy` (falls back to `db push`)
 2. `yarn start` — starts the Express server
 
 **Key deploy notes:**
+
 - The container listens on port `80` (set via `ENV PORT=80` in Dockerfile)
 - All env vars are injected by CapRover at runtime via **App Config → Environmental Variables** — do not bake secrets into the image
 - `db:migrate:prod` uses `prisma migrate deploy` (not `migrate dev`) — applies existing migration files without creating new ones
@@ -99,6 +101,7 @@ Deployed via CapRover using `captain-definition` + `Dockerfile`.
 ## Auth Architecture
 
 Registration is two-step from the UX perspective:
+
 1. User enters display name → **frontend** derives `username` (e.g. `yang.lin`) and optionally checks `GET /auth/availability`. No backend call needed.
 2. User picks an auth method and submits to the appropriate `/auth/register/*` endpoint.
 

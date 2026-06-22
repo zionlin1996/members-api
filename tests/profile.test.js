@@ -1,6 +1,9 @@
 'use strict'
 
 jest.mock('../src/config/prisma', () => ({
+  member: {
+    findUnique: jest.fn(),
+  },
   profile: {
     findUnique: jest.fn(),
     upsert: jest.fn(),
@@ -15,7 +18,11 @@ const { signAccessToken } = require('../src/utils/jwt')
 const MEMBER_ID = 'member-uuid-1'
 const TOKEN = `Bearer ${signAccessToken(MEMBER_ID)}`
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  // requireActive gates the profile getter — default the member to ACTIVE.
+  prisma.member.findUnique.mockResolvedValue({ id: MEMBER_ID, status: 'ACTIVE' })
+})
 
 describe('GET /auth/me/profile', () => {
   it('200 — returns the profile', async () => {
@@ -35,6 +42,15 @@ describe('GET /auth/me/profile', () => {
     expect(res.status).toBe(200)
     expect(res.body.givenName).toBeNull()
     expect(res.body.phoneVerified).toBe(false)
+  })
+
+  it('403 — UNVERIFIED member cannot read profile details', async () => {
+    prisma.member.findUnique.mockResolvedValue({ id: MEMBER_ID, status: 'UNVERIFIED' })
+
+    const res = await request(app).get('/auth/me/profile').set('Authorization', TOKEN)
+
+    expect(res.status).toBe(403)
+    expect(prisma.profile.findUnique).not.toHaveBeenCalled()
   })
 
   it('401 — without a token', async () => {

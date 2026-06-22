@@ -313,11 +313,36 @@ describe('POST /auth/login/passkey/finish', () => {
     expect(res.status).toBe(401)
   })
 
-  it('403 — account pending approval', async () => {
+  it('200 — UNVERIFIED member may log in', async () => {
     prisma.pendingChallenge.findUnique.mockResolvedValue(AUTH_PENDING)
     prisma.credential.findUnique.mockResolvedValue({
       ...STORED_CRED,
       member: { id: MEMBER_ID, status: 'UNVERIFIED' },
+    })
+    verifyAuthenticationResponse.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 1 },
+    })
+    prisma.pendingChallenge.delete.mockResolvedValue({})
+    prisma.credential.update.mockResolvedValue({})
+    prisma.refreshToken.create.mockResolvedValue({})
+
+    const res = await request(app)
+      .post('/auth/login/passkey/finish')
+      .send({
+        sessionId: SESSION_ID,
+        credential: { id: CREDENTIAL_ID, type: 'public-key', response: {} },
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.body.accessToken).toBeDefined()
+  })
+
+  it('403 — SUSPENDED account is denied', async () => {
+    prisma.pendingChallenge.findUnique.mockResolvedValue(AUTH_PENDING)
+    prisma.credential.findUnique.mockResolvedValue({
+      ...STORED_CRED,
+      member: { id: MEMBER_ID, status: 'SUSPENDED' },
     })
     prisma.pendingChallenge.delete.mockResolvedValue({})
 

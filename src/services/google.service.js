@@ -1,13 +1,13 @@
-'use strict';
+'use strict'
 
-const prisma = require('../config/prisma');
-const env = require('../config/env');
-const { signAccessToken, signRefreshToken, refreshTokenExpiresAt } = require('../utils/jwt');
-const { issueIdToken } = require('./oidc.service');
+const prisma = require('../config/prisma')
+const env = require('../config/env')
+const { signAccessToken, signRefreshToken, refreshTokenExpiresAt } = require('../utils/jwt')
+const { issueIdToken } = require('./oidc.service')
 
-const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 
 const REGISTER_SELECT = {
   id: true,
@@ -15,7 +15,7 @@ const REGISTER_SELECT = {
   username: true,
   status: true,
   createdAt: true,
-};
+}
 
 function buildAuthUrl(state) {
   const params = new URLSearchParams({
@@ -26,8 +26,8 @@ function buildAuthUrl(state) {
     state,
     access_type: 'online',
     prompt: 'select_account',
-  });
-  return `${GOOGLE_AUTH_URL}?${params}`;
+  })
+  return `${GOOGLE_AUTH_URL}?${params}`
 }
 
 async function fetchProfile(code) {
@@ -41,38 +41,38 @@ async function fetchProfile(code) {
       redirect_uri: env.GOOGLE_CALLBACK_URL,
       grant_type: 'authorization_code',
     }),
-  });
+  })
 
-  const tokens = await tokenRes.json();
+  const tokens = await tokenRes.json()
   if (!tokens.access_token) {
-    const err = new Error('Google token exchange failed');
-    err.status = 400;
-    throw err;
+    const err = new Error('Google token exchange failed')
+    err.status = 400
+    throw err
   }
 
   const profileRes = await fetch(GOOGLE_USERINFO_URL, {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
-  });
-  return profileRes.json();
+  })
+  return profileRes.json()
 }
 
 async function registerWithGoogle({ profile, displayName, username }) {
   const existing = await prisma.credential.findFirst({
     where: { type: 'GOOGLE', providerId: profile.id },
     select: { id: true },
-  });
+  })
 
   if (existing) {
-    const err = new Error('Google account already linked to an existing member');
-    err.status = 409;
-    throw err;
+    const err = new Error('Google account already linked to an existing member')
+    err.status = 409
+    throw err
   }
 
-  const memberExists = await prisma.member.findUnique({ where: { username }, select: { id: true } });
+  const memberExists = await prisma.member.findUnique({ where: { username }, select: { id: true } })
   if (memberExists) {
-    const err = new Error('Username already taken');
-    err.status = 409;
-    throw err;
+    const err = new Error('Username already taken')
+    err.status = 409
+    throw err
   }
 
   return prisma.member.create({
@@ -88,36 +88,38 @@ async function registerWithGoogle({ profile, displayName, username }) {
       },
     },
     select: REGISTER_SELECT,
-  });
+  })
 }
 
 async function loginWithGoogle({ profile }) {
   const cred = await prisma.credential.findFirst({
     where: { type: 'GOOGLE', providerId: profile.id },
     include: { member: { select: { id: true, status: true } } },
-  });
+  })
 
   if (!cred) {
-    const err = new Error('No account linked to this Google profile');
-    err.status = 401;
-    throw err;
+    const err = new Error('No account linked to this Google profile')
+    err.status = 401
+    throw err
   }
 
-  if (cred.member.status !== 'ACTIVE') {
-    const err = new Error('Account pending approval');
-    err.status = 403;
-    throw err;
+  // UNVERIFIED members may log in (limited, pending-approval view client-side);
+  // only SUSPENDED accounts are denied a session.
+  if (cred.member.status === 'SUSPENDED') {
+    const err = new Error('Account suspended')
+    err.status = 403
+    throw err
   }
 
-  const accessToken = signAccessToken(cred.member.id);
-  const idToken = await issueIdToken(cred.member.id);
-  const refreshToken = signRefreshToken(cred.member.id);
+  const accessToken = signAccessToken(cred.member.id)
+  const idToken = await issueIdToken(cred.member.id)
+  const refreshToken = signRefreshToken(cred.member.id)
 
   await prisma.refreshToken.create({
     data: { token: refreshToken, memberId: cred.member.id, expiresAt: refreshTokenExpiresAt() },
-  });
+  })
 
-  return { accessToken, idToken, refreshToken };
+  return { accessToken, idToken, refreshToken }
 }
 
-module.exports = { buildAuthUrl, fetchProfile, registerWithGoogle, loginWithGoogle };
+module.exports = { buildAuthUrl, fetchProfile, registerWithGoogle, loginWithGoogle }
