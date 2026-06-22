@@ -1,7 +1,16 @@
 # Spec — Member Profiles & OIDC Authorization Server
 
-Status: **Draft / approved design, not yet implemented**
-Scope: `members-api`. Builds on the existing OIDC **token issuer** (see `CLAUDE.md → OIDC issuer`).
+Status: **Implemented through Phase 3 (backend)** — Phases 1–2 (profiles, scope-gated claims) and Phase 3 (third-party Authorization Server) are built. See `CLAUDE.md → OIDC` for the as-built description and `PLAN.md` for status + the FE `/interaction` handoff.
+Scope: `members-api`. Builds on the existing OIDC **token issuer** (see `CLAUDE.md → OIDC`).
+
+**Deviations from this spec made during Phase 3 implementation (the spec below is the original design):**
+
+- **`OidcPayload` uses a composite PK `@@id([type, id])`**, not `id @id` — one `id` value can recur across provider models in a single-table adapter.
+- **Third-party clients are public + mandatory PKCE only** (`token_endpoint_auth_method: 'none'`). `node-oidc-provider` compares client secrets in plaintext, so confidential clients with a hashed secret (`OAuthClient.secretHash`/`isConfidential`, retained for the future) are **not** served yet.
+- **Third-party access tokens are opaque**, consumed at the provider's `/userinfo`. Forcing JWT resource-bound tokens (`features.resourceIndicators`, §4.1) broke `/userinfo` (it rejects resource-exclusive tokens), and there is no separate resource server yet. Audience isolation still holds (opaque ≠ first-party RS256 JWT). `OIDC_API_RESOURCE` is reserved for when a resource server exists.
+- **Provider routes remapped** to avoid first-party collisions: authorization `/authorize` (default `/auth`), userinfo `/userinfo` (default `/me`).
+- **First-party SPA was NOT migrated** to be an OIDC client (deferred); it keeps the custom cookie/BFF-lite login. The two systems coexist by audience.
+- **Provider is mounted as a lazy catch-all** (ESM dynamic `import()`), so the app/server stayed synchronous.
 
 ## Goals
 

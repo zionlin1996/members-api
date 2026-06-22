@@ -109,13 +109,28 @@ Each registration endpoint creates one `Member` (status `UNVERIFIED`) and one `C
 
 WebAuthn ceremonies are stateless between requests — the challenge is stored in `PendingChallenge` with a 5-minute TTL. The `sessionId` returned by `/start` endpoints is the `PendingChallenge.id`.
 
-## OIDC issuer
+## OIDC
 
-This API is an OIDC **token issuer** (not yet a full authorization server — there is no `/authorize`/`/token`). It mints tokens through its own login endpoints and publishes the means to verify them.
+There are **two** OIDC token systems, sharing one signing key but isolated by audience:
+
+### First-party token issuer (the SPA's session)
+
+Mints tokens through the custom `/auth/*` login endpoints and publishes the means to verify them.
 
 - **Token signing**: access tokens and ID tokens are **RS256**, signed with the OIDC key pair (`src/utils/oidcKeys.js`). Refresh tokens and OAuth state tokens stay **HS256** (internal, never externally verified). The signing key comes from `OIDC_PRIVATE_KEY` (PEM or base64 PEM); if unset, an ephemeral key is generated at boot (dev only).
-- **`kid`** is the RFC 7638 JWK thumbprint — stable for a given key, so it survives a future migration to a full authorization server.
-- **Login/refresh responses** now include `idToken` alongside `accessToken` (the refresh token stays in the httpOnly cookie). Registration endpoints issue no tokens.
-- **Claims** are defined once in `oidc.service.getClaims()` — the single source of truth for ID-token and `/userinfo` claims. `sub` is the **immutable `Member.id`** (never `username`, which can change). `email` is computed as `{username}@EMAIL_DOMAIN`.
-- **Endpoints**: `GET /.well-known/openid-configuration` (discovery), `GET /.well-known/jwks.json` (public keys), `GET /auth/userinfo` (Bearer-authenticated standard claims).
-- **`auth.middleware`** verifies access tokens with the OIDC public key (RS256), checking `iss` and `aud`.
+- **`kid`** is the RFC 7638 JWK thumbprint — stable for a given key, so first-party tokens and the Authorization Server share one published JWKS.
+- **Login/refresh responses** include `idToken` alongside `accessToken` (the refresh token stays in the httpOnly cookie). Registration endpoints issue no tokens.
+- **Claims** are defined once in `oidc.service.getClaims(member, profile, scopes)` — the single source of truth for first-party ID-token / `/auth/userinfo` claims **and** the Authorization Server's `findAccount` resolver. `sub` is the **immutable `Member.id`**; `email` is `{username}@EMAIL_DOMAIN`.
+- **`auth.middleware`** verifies access tokens with the OIDC public key (RS256), asserting `iss === OIDC_ISSUER` **and `aud === OIDC_ISSUER`**. The `aud` check is the isolation guard (see below).
+
+### Authorization Server — third-party clients (Phase 3, `src/oidc/`)
+
+Built on **`node-oidc-provider` v9** (ESM-only → loaded via dynamic `import()` in `src/oidc/provider.js`; the codebase stays CommonJS). Serves **third-party** apps via **Authorization Code + PKCE**; the first-party SPA still uses the custom login above.
+
+- **Mounting**: `provider.callback()` is a terminal Koa listener — it's mounted **last** in `app.js` as a lazy catch-all (initialized on first OIDC request), so the `/auth`,`/members`,`/admin`,`/interaction` routers handle their paths first and only OIDC routes fall through. The provider **owns** discovery + JWKS (the old hand-rolled `/.well-known/*` routes were removed; `/.well-known/jwks.json` 301s to `/jwks`).
+- **Routes** are remapped to avoid colliding with first-party paths: authorization → `/authorize`, userinfo → `/userinfo` (defaults `/auth` and `/me` would clash). Also `/token`, `/jwks`, `/session/end`, `/token/{introspection,revocation}`.
+- **Persistence**: a generic single-table Prisma adapter (`src/oidc/adapter.js`) over `OidcPayload` (composite PK `[type, id]`); `consume` marks `consumedAt` without deleting (replay detection). A `memory-adapter.js` is used for tests (`OIDC_ADAPTER=memory`).
+- **Clients**: admin-managed registry `OAuthClient` (`/admin/oauth-clients`, `oauthClient.service.js`), loaded dynamically by a Client adapter. **Public + mandatory PKCE only** (`token_endpoint_auth_method: 'none'`) — the provider does plaintext secret comparison, so confidential clients with a stored `secretHash` are deferred.
+- **Interaction**: login + consent are **dedicated SPA routes**. The provider redirects to `${APP_ORIGIN}/interaction/:uid`; the SPA calls the API's `/interaction/:uid` JSON endpoints (`interaction.controller.js`). The route prefix **must** be `/interaction` to match the provider's path-scoped `_interaction` cookie. The login step reuses the **authenticate-only seam** (`verifyPassword`/`verifyPasskeyAuthentication`/`verifyGoogle`/`verifyTelegram`) — verify credentials and enforce `SUSPENDED → 403` **without** minting a first-party session. Cross-site cookies are `SameSite=None; Secure` over HTTPS, falling back to `Lax`/insecure on http (dev).
+- **Audience isolation**: third-party access tokens are **opaque** (consumed at the provider's `/userinfo`). They can't reach first-party endpoints because `auth.middleware` requires a valid RS256 JWT with `aud === OIDC_ISSUER`. `OIDC_API_RESOURCE` is reserved for future self-verifiable JWT tokens against a dedicated resource server.
+- **Testing**: jest can't ESM-import the provider, so unit tests (adapter, interaction controller, client service, audience isolation) run under `yarn test`, and the full `/authorize→/token→/userinfo` flow runs standalone under `yarn test:oidc` (needs the local DB).

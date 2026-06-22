@@ -3,17 +3,16 @@
 const env = require('../config/env')
 const memberService = require('./member.service')
 const { signIdToken } = require('../utils/jwt')
-const oidcKeys = require('../utils/oidcKeys')
 
 // Namespace for non-standard (custom) claims.
 const NS = 'https://yangfrenz.club/'
 
 // Scope sets used by first-party endpoints. The ID token stays lean (identity
 // only); /userinfo releases everything the first-party app is entitled to.
+// (OIDC discovery/JWKS are now served by the Authorization Server — see
+// src/oidc/provider.js — so this service only resolves claims + signs ID tokens.)
 const ID_TOKEN_SCOPES = ['openid', 'profile', 'email']
 const FIRST_PARTY_SCOPES = ['openid', 'profile', 'email', 'address', 'phone', 'membership']
-
-const ALL_SCOPES = ['openid', 'profile', 'email', 'address', 'phone', 'membership']
 
 function prune(obj) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null && v !== undefined))
@@ -128,52 +127,8 @@ async function issueIdToken(memberId) {
   return signIdToken(getClaims(member, null, ID_TOKEN_SCOPES))
 }
 
-/** Build the OIDC discovery document. */
-function discoveryDocument() {
-  const issuer = env.OIDC_ISSUER
-  return {
-    issuer,
-    jwks_uri: `${issuer}/.well-known/jwks.json`,
-    userinfo_endpoint: `${issuer}/auth/userinfo`,
-    response_types_supported: ['id_token token'],
-    subject_types_supported: ['public'],
-    id_token_signing_alg_values_supported: [oidcKeys.ALG],
-    scopes_supported: ALL_SCOPES,
-    claims_supported: [
-      'sub',
-      'name',
-      'given_name',
-      'family_name',
-      'middle_name',
-      'nickname',
-      'preferred_username',
-      'picture',
-      'website',
-      'profile',
-      'gender',
-      'birthdate',
-      'zoneinfo',
-      'locale',
-      'updated_at',
-      'email',
-      'email_verified',
-      'address',
-      'phone_number',
-      'phone_number_verified',
-      `${NS}membership_status`,
-      `${NS}member_since`,
-      `${NS}pronouns`,
-    ],
-    // NOTE: no authorization_endpoint / token_endpoint yet — this issuer mints
-    // tokens through its own login endpoints (token-layer issuer). Those are
-    // added if/when it becomes a full authorization server.
-  }
-}
-
 module.exports = {
   getClaims,
   issueIdToken,
-  discoveryDocument,
   FIRST_PARTY_SCOPES,
-  jwks: oidcKeys.jwks,
 }

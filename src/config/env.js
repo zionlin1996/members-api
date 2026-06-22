@@ -1,12 +1,12 @@
-'use strict';
+'use strict'
 
-require('dotenv').config();
+require('dotenv').config()
 
 const required = (key) => {
-  const value = process.env[key];
-  if (!value) throw new Error(`Missing required env var: ${key}`);
-  return value;
-};
+  const value = process.env[key]
+  if (!value) throw new Error(`Missing required env var: ${key}`)
+  return value
+}
 
 // ── Domain topology ──────────────────────────────────────────────────────────
 // All public hostnames are derived from three base vars, so production only
@@ -14,13 +14,13 @@ const required = (key) => {
 // RP, OIDC issuer/audience, email domain) is derived from them. Each derived
 // value can still be overridden by its own env var — needed for local dev, where
 // the app/API run on http://localhost with ports that aren't derivable.
-const DOMAIN = process.env.DOMAIN || 'yangfrenz.club';
-const API_SUBDOMAIN = process.env.API_SUBDOMAIN || 'members-api';
-const APP_SUBDOMAIN = process.env.APP_SUBDOMAIN || 'members';
+const DOMAIN = process.env.DOMAIN || 'yangfrenz.club'
+const API_SUBDOMAIN = process.env.API_SUBDOMAIN || 'members-api'
+const APP_SUBDOMAIN = process.env.APP_SUBDOMAIN || 'members'
 
-const APP_HOST = `${APP_SUBDOMAIN}.${DOMAIN}`; // members.yangfrenz.club
-const APP_ORIGIN = `https://${APP_HOST}`; // https://members.yangfrenz.club
-const API_ORIGIN = `https://${API_SUBDOMAIN}.${DOMAIN}`; // https://members-api.yangfrenz.club
+const APP_HOST = `${APP_SUBDOMAIN}.${DOMAIN}` // members.yangfrenz.club
+const APP_ORIGIN = `https://${APP_HOST}` // https://members.yangfrenz.club
+const API_ORIGIN = `https://${API_SUBDOMAIN}.${DOMAIN}` // https://members-api.yangfrenz.club
 
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -56,6 +56,18 @@ module.exports = {
   OIDC_ISSUER: process.env.OIDC_ISSUER || API_ORIGIN,
   OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID || APP_HOST,
   OIDC_PRIVATE_KEY: process.env.OIDC_PRIVATE_KEY || '',
+
+  // OIDC Authorization Server (Phase 3). Cookie-signing keys for the provider's
+  // interaction/session cookies. OIDC_API_RESOURCE is the audience stamped on
+  // third-party JWT access tokens — kept DISTINCT from OIDC_ISSUER so they can't
+  // pass the first-party auth.middleware (which asserts aud === OIDC_ISSUER).
+  // APP_ORIGIN is where the provider redirects for login/consent (SPA routes).
+  OIDC_COOKIE_KEYS: (process.env.OIDC_COOKIE_KEYS || process.env.JWT_ACCESS_SECRET || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean),
+  OIDC_API_RESOURCE: process.env.OIDC_API_RESOURCE || `${API_ORIGIN}/api`,
+  OIDC_ADAPTER: process.env.OIDC_ADAPTER || 'prisma',
   // Domain used to compute member emails ({username}@EMAIL_DOMAIN) for claims.
   EMAIL_DOMAIN: process.env.EMAIL_DOMAIN || DOMAIN,
 
@@ -66,4 +78,4 @@ module.exports = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
 
   ADMIN_API_KEY: process.env.ADMIN_API_KEY || '',
-};
+}

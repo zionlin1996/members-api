@@ -71,6 +71,43 @@ model Profile {
   updatedAt DateTime @updatedAt
 }
 
+// Generic single-table persistence for node-oidc-provider (the OIDC
+// Authorization Server). One row per provider model instance (Session, Grant,
+// AccessToken, AuthorizationCode, Interaction, …) — `type` is the provider's
+// model name. The adapter (src/oidc/adapter.js) maps the provider's
+// upsert/find/findByUid/findByUserCode/consume/destroy/revokeByGrantId onto it.
+// `id` is only unique within a `type`, hence the composite primary key.
+model OidcPayload {
+  id         String    @default(uuid())
+  type       String // provider model name (Session, Grant, AccessToken, …)
+  payload    Json
+  grantId    String? // set on tokens/codes/grants; revokeByGrantId deletes by it
+  userCode   String? // device flow only
+  uid        String?   @unique // session lookup (findByUid)
+  expiresAt  DateTime? // lazy expiry — find* treat past-due rows as absent
+  consumedAt DateTime? // set by consume(); never deletes (replay detection)
+
+  @@id([type, id])
+  @@index([grantId])
+  @@index([type])
+}
+
+// Third-party application registry for the Authorization Server (admin-managed
+// via /admin/oauth-clients). Public SPAs/native apps are PKCE-only (no secret);
+// server-side apps are confidential and store a bcrypt secret hash.
+model OAuthClient {
+  id             String   @id @default(uuid())
+  clientId       String   @unique
+  name           String
+  secretHash     String? // null for public (PKCE-only) clients
+  redirectUris   String[]
+  allowedScopes  String[] // subset of supported scopes
+  isConfidential Boolean  @default(false)
+  logoUri        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model Credential {
   id           String         @id @default(uuid())
   memberId     String

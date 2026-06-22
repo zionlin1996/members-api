@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:oidc": "node tests/integration/oidc-flow.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -37,6 +38,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
+    "oidc-provider": "^9.8.5",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0"
   },

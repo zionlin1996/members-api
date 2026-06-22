@@ -1,7 +1,7 @@
-'use strict';
+'use strict'
 
-const crypto = require('crypto');
-const env = require('../config/env');
+const crypto = require('crypto')
+const env = require('../config/env')
 
 /**
  * OIDC signing key management.
@@ -18,35 +18,41 @@ const env = require('../config/env');
  */
 
 function loadPrivateKey() {
-  const raw = env.OIDC_PRIVATE_KEY;
+  const raw = env.OIDC_PRIVATE_KEY
   if (!raw) {
     // eslint-disable-next-line no-console
     console.warn(
       '[oidc] OIDC_PRIVATE_KEY not set — generating an ephemeral RSA key pair. ' +
-        'Set OIDC_PRIVATE_KEY in production so tokens survive restarts.'
-    );
-    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
-    return privateKey;
+        'Set OIDC_PRIVATE_KEY in production so tokens survive restarts.',
+    )
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
+    return privateKey
   }
 
   const pem = raw.trimStart().startsWith('-----BEGIN')
     ? raw
-    : Buffer.from(raw, 'base64').toString('utf8');
-  return crypto.createPrivateKey(pem);
+    : Buffer.from(raw, 'base64').toString('utf8')
+  return crypto.createPrivateKey(pem)
 }
 
-const privateKey = loadPrivateKey();
-const publicKey = crypto.createPublicKey(privateKey);
+const privateKey = loadPrivateKey()
+const publicKey = crypto.createPublicKey(privateKey)
 
 // Native JWK export (Node 16+) — { kty: 'RSA', n, e } for an RSA public key.
-const baseJwk = publicKey.export({ format: 'jwk' });
+const baseJwk = publicKey.export({ format: 'jwk' })
 
 // RFC 7638 thumbprint: SHA-256 over the canonical (lexicographically ordered)
 // JWK members, base64url-encoded.
-const canonical = JSON.stringify({ e: baseJwk.e, kty: baseJwk.kty, n: baseJwk.n });
-const kid = crypto.createHash('sha256').update(canonical).digest('base64url');
+const canonical = JSON.stringify({ e: baseJwk.e, kty: baseJwk.kty, n: baseJwk.n })
+const kid = crypto.createHash('sha256').update(canonical).digest('base64url')
 
-const publicJwk = { ...baseJwk, kid, use: 'sig', alg: 'RS256' };
+const publicJwk = { ...baseJwk, kid, use: 'sig', alg: 'RS256' }
+
+// Private JWK (includes d, p, q, …) — needed by node-oidc-provider's `jwks`
+// config, which signs tokens itself. Carries the SAME kid as the public JWK, so
+// the provider's published JWKS matches the key the token issuer already uses;
+// existing verifiers and third-party tokens both verify against one key.
+const privateJwk = { ...privateKey.export({ format: 'jwk' }), kid, use: 'sig', alg: 'RS256' }
 
 module.exports = {
   privateKey,
@@ -54,4 +60,5 @@ module.exports = {
   kid,
   ALG: 'RS256',
   jwks: { keys: [publicJwk] },
-};
+  privateJwk,
+}

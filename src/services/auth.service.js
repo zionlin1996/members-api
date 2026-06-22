@@ -43,7 +43,11 @@ async function registerPassword({ displayName, username, password, backupEmail }
   })
 }
 
-async function login({ username, password }) {
+// Authenticate-only seam: verify a username/password and return the member,
+// enforcing SUSPENDED → 403 (UNVERIFIED is allowed) but issuing NO tokens.
+// Reused by login() below and by the OIDC interaction login step (which needs
+// the member id without minting a first-party session).
+async function verifyPassword({ username, password }) {
   const member = await prisma.member.findUnique({
     where: { username },
     include: { credentials: { where: { type: 'PASSWORD' } } },
@@ -70,6 +74,12 @@ async function login({ username, password }) {
     err.status = 401
     throw err
   }
+
+  return member
+}
+
+async function login({ username, password }) {
+  const member = await verifyPassword({ username, password })
 
   const accessToken = signAccessToken(member.id)
   const idToken = await issueIdToken(member.id)
@@ -120,4 +130,4 @@ async function checkAvailability({ username }) {
   return { username: { available: !existing } }
 }
 
-module.exports = { registerPassword, login, refresh, logout, checkAvailability }
+module.exports = { registerPassword, verifyPassword, login, refresh, logout, checkAvailability }

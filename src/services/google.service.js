@@ -91,7 +91,10 @@ async function registerWithGoogle({ profile, displayName, username }) {
   })
 }
 
-async function loginWithGoogle({ profile }) {
+// Authenticate-only seam: resolve the member linked to a Google profile,
+// enforcing SUSPENDED → 403 (UNVERIFIED allowed) but issuing NO tokens. Reused
+// by loginWithGoogle() and by the OIDC interaction login step.
+async function verifyGoogle({ profile }) {
   const cred = await prisma.credential.findFirst({
     where: { type: 'GOOGLE', providerId: profile.id },
     include: { member: { select: { id: true, status: true } } },
@@ -111,15 +114,21 @@ async function loginWithGoogle({ profile }) {
     throw err
   }
 
-  const accessToken = signAccessToken(cred.member.id)
-  const idToken = await issueIdToken(cred.member.id)
-  const refreshToken = signRefreshToken(cred.member.id)
+  return cred.member
+}
+
+async function loginWithGoogle({ profile }) {
+  const member = await verifyGoogle({ profile })
+
+  const accessToken = signAccessToken(member.id)
+  const idToken = await issueIdToken(member.id)
+  const refreshToken = signRefreshToken(member.id)
 
   await prisma.refreshToken.create({
-    data: { token: refreshToken, memberId: cred.member.id, expiresAt: refreshTokenExpiresAt() },
+    data: { token: refreshToken, memberId: member.id, expiresAt: refreshTokenExpiresAt() },
   })
 
   return { accessToken, idToken, refreshToken }
 }
 
-module.exports = { buildAuthUrl, fetchProfile, registerWithGoogle, loginWithGoogle }
+module.exports = { buildAuthUrl, fetchProfile, registerWithGoogle, verifyGoogle, loginWithGoogle }

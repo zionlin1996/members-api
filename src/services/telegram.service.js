@@ -87,7 +87,10 @@ async function registerWithTelegram({ telegramData, displayName, username }) {
   })
 }
 
-async function loginWithTelegram({ telegramData }) {
+// Authenticate-only seam: verify the Telegram widget HMAC, resolve the linked
+// member, enforce SUSPENDED → 403 (UNVERIFIED allowed) but issue NO tokens.
+// Reused by loginWithTelegram() and by the OIDC interaction login step.
+async function verifyTelegram({ telegramData }) {
   if (!verifyTelegramData(telegramData)) {
     const err = new Error('Invalid Telegram auth data')
     err.status = 401
@@ -115,15 +118,21 @@ async function loginWithTelegram({ telegramData }) {
     throw err
   }
 
-  const accessToken = signAccessToken(cred.member.id)
-  const idToken = await issueIdToken(cred.member.id)
-  const refreshToken = signRefreshToken(cred.member.id)
+  return cred.member
+}
+
+async function loginWithTelegram({ telegramData }) {
+  const member = await verifyTelegram({ telegramData })
+
+  const accessToken = signAccessToken(member.id)
+  const idToken = await issueIdToken(member.id)
+  const refreshToken = signRefreshToken(member.id)
 
   await prisma.refreshToken.create({
-    data: { token: refreshToken, memberId: cred.member.id, expiresAt: refreshTokenExpiresAt() },
+    data: { token: refreshToken, memberId: member.id, expiresAt: refreshTokenExpiresAt() },
   })
 
   return { accessToken, idToken, refreshToken }
 }
 
-module.exports = { verifyTelegramData, registerWithTelegram, loginWithTelegram }
+module.exports = { verifyTelegramData, registerWithTelegram, verifyTelegram, loginWithTelegram }

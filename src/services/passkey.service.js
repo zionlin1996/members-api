@@ -156,7 +156,10 @@ async function startAuthentication({ username }) {
   return { options, sessionId: pending.id }
 }
 
-async function finishAuthentication({ sessionId, credential }) {
+// Authenticate-only seam: run the WebAuthn assertion ceremony and return the
+// member, enforcing SUSPENDED → 403 (UNVERIFIED allowed) but issuing NO tokens.
+// Reused by finishAuthentication() and by the OIDC interaction login step.
+async function verifyPasskeyAuthentication({ sessionId, credential }) {
   const pending = await prisma.pendingChallenge.findUnique({ where: { id: sessionId } })
 
   if (!pending || pending.expiresAt < new Date()) {
@@ -223,14 +226,20 @@ async function finishAuthentication({ sessionId, credential }) {
     data: { meta: { ...storedCred.meta, counter: verification.authenticationInfo.newCounter } },
   })
 
-  const accessToken = signAccessToken(storedCred.member.id)
-  const idToken = await issueIdToken(storedCred.member.id)
-  const refreshToken = signRefreshToken(storedCred.member.id)
+  return storedCred.member
+}
+
+async function finishAuthentication({ sessionId, credential }) {
+  const member = await verifyPasskeyAuthentication({ sessionId, credential })
+
+  const accessToken = signAccessToken(member.id)
+  const idToken = await issueIdToken(member.id)
+  const refreshToken = signRefreshToken(member.id)
 
   await prisma.refreshToken.create({
     data: {
       token: refreshToken,
-      memberId: storedCred.member.id,
+      memberId: member.id,
       expiresAt: refreshTokenExpiresAt(),
     },
   })
@@ -242,5 +251,6 @@ module.exports = {
   startRegistration,
   finishRegistration,
   startAuthentication,
+  verifyPasskeyAuthentication,
   finishAuthentication,
 }
