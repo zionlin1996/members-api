@@ -12,5 +12,6 @@ const router = Router()
 router.get('/:uid', interactionController.details)
 router.post('/:uid/login', interactionController.login)
 router.post('/:uid/consent', interactionController.consent)
+router.post('/:uid/deny', interactionController.deny)
 
 module.exports = router

@@ -126,6 +126,27 @@ describe('interaction controller — consent', () => {
     )
     expect(res.body).toEqual({ redirectTo: 'https://issuer/auth/uid/resume' })
   })
+
+  test('deny aborts the request with access_denied (no Grant saved)', async () => {
+    const Grant = jest.fn()
+    const interactionResult = jest.fn().mockResolvedValue('https://client/cb?error=access_denied')
+    getProvider.mockResolvedValue({ Grant, interactionResult })
+
+    const req = {}
+    const res = mockRes()
+    const next = jest.fn()
+    await controller.deny(req, res, next)
+
+    expect(next).not.toHaveBeenCalled()
+    expect(Grant).not.toHaveBeenCalled()
+    expect(interactionResult).toHaveBeenCalledWith(
+      req,
+      res,
+      { error: 'access_denied', error_description: 'End-user denied the authorization request' },
+      { mergeWithLastSubmission: false },
+    )
+    expect(res.body).toEqual({ redirectTo: 'https://client/cb?error=access_denied' })
+  })
 })
 
 describe('interaction controller — details', () => {

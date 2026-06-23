@@ -112,4 +112,26 @@ async function consent(req, res, next) {
   }
 }
 
-module.exports = { details, login, consent }
+// POST /interaction/:uid/deny — the member rejects the consent request. Resolving
+// the interaction with an `error` aborts the authorization flow: the provider
+// bounces the browser back to the client's redirect_uri with the OAuth standard
+// `access_denied` error (no Grant is saved), which the SPA navigates to.
+async function deny(req, res, next) {
+  try {
+    const provider = await getProvider()
+    const redirectTo = await provider.interactionResult(
+      req,
+      res,
+      {
+        error: 'access_denied',
+        error_description: 'End-user denied the authorization request',
+      },
+      { mergeWithLastSubmission: false },
+    )
+    return res.json({ redirectTo })
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { details, login, consent, deny }

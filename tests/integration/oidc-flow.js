@@ -210,9 +210,48 @@ async function main() {
       'revoked client should be gone from connections',
     )
 
+    // ── 12. deny path: a fresh authorize → consent → deny aborts the flow ────
+    // The session cookie is still set (the member stayed logged in), so this
+    // authorize lands straight on consent (the grant was revoked in step 11).
+    const denyQ = new URLSearchParams({
+      client_id: client.clientId,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'openid profile email',
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      state: 'deny-state',
+      nonce: 'n0nce2',
+    })
+    res = await agent.get(`/authorize?${denyQ}`)
+    assert.strictEqual(res.status, 303, `deny /authorize should 303, got ${res.status}`)
+    uid = uidFromInteractionRedirect(res.headers.location)
+    res = await agent.get(`/interaction/${uid}`)
+    assert.strictEqual(res.body.prompt, 'consent', 'deny flow should reach the consent prompt')
+
+    res = await agent.post(`/interaction/${uid}/deny`).send({})
+    assert.strictEqual(res.status, 200, `deny should 200, got ${res.status}`)
+    assert(res.body.redirectTo, 'deny should return a resume URL')
+
+    res = await agent.get(toPath(res.body.redirectTo))
+    assert.strictEqual(res.status, 303, 'resume after deny should 303 back to the client')
+    const denyCb = new URL(res.headers.location)
+    assert.strictEqual(
+      `${denyCb.origin}${denyCb.pathname}`,
+      REDIRECT_URI,
+      'deny should redirect to the client callback',
+    )
+    assert.strictEqual(
+      denyCb.searchParams.get('error'),
+      'access_denied',
+      'deny callback must carry error=access_denied',
+    )
+    assert.strictEqual(denyCb.searchParams.get('state'), 'deny-state', 'state should round-trip')
+    assert(!denyCb.searchParams.get('code'), 'deny callback must NOT carry an authorization code')
+
     console.log(
       '\n✅ OIDC full-flow integration test passed ' +
-        '(authorize → login → consent → token → userinfo; isolation; connections list + revoke)',
+        '(authorize → login → consent → token → userinfo; isolation; connections list + revoke; consent deny)',
     )
   } finally {
     if (member) {
