@@ -7,16 +7,15 @@
  * so this runs under plain Node (which imports ESM natively):  `yarn test:oidc`.
  * It exercises /authorize → SPA interaction (login + consent) → /token (PKCE) →
  * /userinfo, asserting scoped-claim release and that the opaque third-party
- * access token is isolated from first-party endpoints.
+ * access token is isolated from first-party endpoints, then the member's
+ * connected-apps management (list + revoke).
  *
  * Requires a local Postgres (the same DATABASE_URL as `yarn db:migrate`): it
- * seeds a member + a public OAuth client, runs the flow, then cleans both up.
- * OIDC protocol state (codes/grants/sessions) uses the in-memory adapter, so the
- * OidcPayload table is never touched.
+ * seeds a member + a public OAuth client and runs against the real Prisma
+ * adapter, then cleans up the member, client, and OIDC payload rows it created.
  */
 
 require('dotenv').config()
-process.env.OIDC_ADAPTER = 'memory'
 
 const assert = require('assert')
 const crypto = require('crypto')
@@ -27,6 +26,7 @@ const app = require('../../src/app')
 const prisma = require('../../src/config/prisma')
 const env = require('../../src/config/env')
 const oidcClientService = require('../../src/services/oauthClient.service')
+const { signAccessToken } = require('../../src/utils/jwt')
 
 const REDIRECT_URI = 'https://client.example/callback'
 const USERNAME = `oidc.flow.${Date.now()}`
@@ -179,13 +179,50 @@ async function main() {
     res = await agent.get('/auth/me').set('Authorization', `Bearer ${accessToken}`)
     assert.strictEqual(res.status, 401, 'third-party access token must be rejected by /auth/me')
 
+    // ── 10. connected apps: the member sees the grant they just created ─────
+    // Use a genuine FIRST-PARTY token for the member (the flow only authenticated
+    // them through the AS interaction, not a first-party session).
+    const firstPartyAuth = { Authorization: `Bearer ${signAccessToken(member.id)}` }
+    res = await agent.get('/auth/me/connections').set(firstPartyAuth)
+    assert.strictEqual(res.status, 200, `/me/connections should 200, got ${res.status}`)
+    const conn = res.body.connections.find((c) => c.clientId === client.clientId)
+    assert(conn, 'the authorized client should appear in connections')
+    assert.deepStrictEqual(
+      conn.scopes.sort(),
+      ['email', 'openid', 'profile'],
+      'granted scopes listed',
+    )
+
+    // ── 11. revoke → grant + its tokens are gone ────────────────────────────
+    res = await agent.delete(`/auth/me/connections/${client.clientId}`).set(firstPartyAuth)
+    assert.strictEqual(res.status, 204, `revoke should 204, got ${res.status}`)
+
+    res = await agent.get('/userinfo').set('Authorization', `Bearer ${accessToken}`)
+    assert.strictEqual(
+      res.status,
+      401,
+      'revoked third-party access token must no longer work at /userinfo',
+    )
+
+    res = await agent.get('/auth/me/connections').set(firstPartyAuth)
+    assert(
+      !res.body.connections.some((c) => c.clientId === client.clientId),
+      'revoked client should be gone from connections',
+    )
+
     console.log(
       '\n✅ OIDC full-flow integration test passed ' +
-        '(authorize → login → consent → token → userinfo; third-party token isolated from first-party)',
+        '(authorize → login → consent → token → userinfo; isolation; connections list + revoke)',
     )
   } finally {
+    if (member) {
+      // Clean the OIDC payload rows (grants/sessions/tokens/codes) the flow created.
+      await prisma.oidcPayload
+        .deleteMany({ where: { payload: { path: ['accountId'], equals: member.id } } })
+        .catch(() => {})
+      await prisma.member.delete({ where: { id: member.id } }).catch(() => {})
+    }
     if (client) await prisma.oAuthClient.delete({ where: { id: client.id } }).catch(() => {})
-    if (member) await prisma.member.delete({ where: { id: member.id } }).catch(() => {})
     await prisma.$disconnect()
   }
 }

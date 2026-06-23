@@ -268,6 +268,17 @@ POST /interaction/:uid/login    — { method: "password"|"passkey"|"telegram"|"g
 POST /interaction/:uid/consent  — (empty body) → { redirectTo }
 ```
 
+#### Connected apps (member self-service)
+
+Manage the third-party apps a member has authorized (Bearer; the member's own grants):
+
+```
+GET    /auth/me/connections             — { connections: [{ clientId, name, logoUri, scopes[], authorizedAt }] }
+DELETE /auth/me/connections/:clientId   — 204; revokes the client's grant(s) + all its tokens (404 if none)
+```
+
+Connections are derived from the Authorization Server's Grant records; revoking deletes the grant rows and every token issued under them.
+
 ### Members
 
 All member routes require `Authorization: Bearer <accessToken>`.

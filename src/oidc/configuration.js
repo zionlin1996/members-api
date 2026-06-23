@@ -7,7 +7,6 @@ const profileService = require('../services/profile.service')
 const oauthClientService = require('../services/oauthClient.service')
 const oidcService = require('../services/oidc.service')
 const PrismaAdapter = require('./adapter')
-const MemoryAdapter = require('./memory-adapter')
 
 const NS = 'https://yangfrenz.club/'
 
@@ -15,11 +14,6 @@ const NS = 'https://yangfrenz.club/'
 // `Secure`, which browsers reject over plain http — so in local dev (http
 // issuer) we fall back to lax/insecure cookies. See PLAN §3b (cross-site cookies).
 const isHttps = env.OIDC_ISSUER.startsWith('https://')
-
-// The payload adapter is swappable for tests (OIDC_ADAPTER=memory) so the full
-// /authorize → /token flow can run without a database. Clients are always
-// loaded dynamically from the OAuthClient registry via a thin Client adapter.
-const PayloadAdapter = env.OIDC_ADAPTER === 'memory' ? MemoryAdapter : PrismaAdapter
 
 class ClientAdapter {
   async find(clientId) {
@@ -37,7 +31,7 @@ class ClientAdapter {
 }
 
 function adapter(name) {
-  return name === 'Client' ? new ClientAdapter() : new PayloadAdapter(name)
+  return name === 'Client' ? new ClientAdapter() : new PrismaAdapter(name)
 }
 
 // Resolve a member's OIDC claims for the granted scopes, reusing the single

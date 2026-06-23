@@ -74,7 +74,6 @@ module.exports = {
     .map((k) => k.trim())
     .filter(Boolean),
   OIDC_API_RESOURCE: process.env.OIDC_API_RESOURCE || `${API_ORIGIN}/api`,
-  OIDC_ADAPTER: process.env.OIDC_ADAPTER || 'prisma',
   // Domain used to compute member emails ({username}@EMAIL_DOMAIN) for claims.
   EMAIL_DOMAIN: process.env.EMAIL_DOMAIN || DOMAIN,
 

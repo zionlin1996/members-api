@@ -3,6 +3,7 @@
 const { Router } = require('express')
 const authController = require('../controllers/auth.controller')
 const profileController = require('../controllers/profile.controller')
+const connectionsController = require('../controllers/connections.controller')
 const { authenticate, requireActive } = require('../middleware/auth.middleware')
 
 const router = Router()
@@ -24,6 +25,10 @@ router.get('/me', authenticate, authController.me)
 router.get('/me/profile', authenticate, requireActive, profileController.getProfile)
 router.patch('/me/profile', authenticate, profileController.updateProfile)
 router.get('/userinfo', authenticate, requireActive, authController.userinfo)
+// Connected third-party apps (OIDC grants) — the member's own data; any logged-in
+// member may view/revoke regardless of approval status.
+router.get('/me/connections', authenticate, connectionsController.listConnections)
+router.delete('/me/connections/:clientId', authenticate, connectionsController.revokeConnection)
 router.post('/refresh', authController.refresh)
 router.post('/logout', authController.logout)
 
