@@ -106,15 +106,32 @@ POST /auth/register/passkey/finish
 { "sessionId": "...", "credential": { ...WebAuthn response... } }
 ```
 
-#### Register — Google OAuth
+#### Register / Login — Google OAuth
+
+Google is a full-page **redirect** flow (unlike the XHR-based methods):
 
 ```
-GET /auth/register/google?displayName=Yang+Lin&username=yang.lin
-→ 302 redirect to Google consent screen
+GET /auth/register/google?displayName=Yang+Lin&username=yang.lin   (sign-up)
+GET /auth/login/google                                             (sign-in)
+→ 302 redirect to the Google consent screen
 
-GET /auth/google/callback  (Google redirects here)
-→ issues tokens
+GET /auth/google/callback  (Google redirects here with ?code&state)
+→ sets the refreshToken cookie, then 302-redirects to the SPA (APP_ORIGIN).
+  The SPA revives the session via /auth/refresh on load. New sign-ups are
+  auto-logged-in as UNVERIFIED. On failure → APP_ORIGIN/login?error=<message>.
 ```
+
+**Google Cloud Console setup** (Credentials → your "Web application" OAuth client):
+
+- **Authorized redirect URIs** — add the callback URL for each environment. This
+  is where `localhost` goes; `http://localhost:3000/auth/google/callback` is
+  allowed (Google exempts localhost from the HTTPS-only rule).
+  - prod: `https://members-api.yangfrenz.club/auth/google/callback`
+  - dev: `http://localhost:3000/auth/google/callback`
+- **Authorized domains** (OAuth consent screen) — only the prod registrable
+  domain (`yangfrenz.club`). Do **not** add `localhost` here; it isn't accepted
+  and isn't needed. Set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` in `.env`
+  (the callback URL is derived — no env var needed).
 
 #### Register — Telegram
 

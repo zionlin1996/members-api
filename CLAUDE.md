@@ -109,6 +109,8 @@ Each registration endpoint creates one `Member` (status `UNVERIFIED`) and one `C
 
 WebAuthn ceremonies are stateless between requests — the challenge is stored in `PendingChallenge` with a 5-minute TTL. The `sessionId` returned by `/start` endpoints is the `PendingChallenge.id`.
 
+Password/passkey/Telegram logins are XHR (JSON in, tokens out). **Google is a full-page redirect** flow: `/auth/{login,register}/google` 302 to Google; `/auth/google/callback` sets the refresh cookie and 302s to `APP_ORIGIN` (the SPA revives the session via `/auth/refresh` — no token in the URL), bouncing failures to `APP_ORIGIN/login?error=…`. Register/login intent rides in a signed `state` token. `GOOGLE_CALLBACK_URL` is derived from the API base URL; register it under the OAuth client's **Authorized redirect URIs** (where `localhost` is allowed), not the consent screen's **Authorized domains**.
+
 ## OIDC
 
 There are **two** OIDC token systems, sharing one signing key but isolated by audience:
