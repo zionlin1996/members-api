@@ -23,6 +23,11 @@ const APP_HOST = `${APP_SUBDOMAIN}.${DOMAIN}` // members.yangfrenz.club
 // for dev (the SPA runs on http://localhost:5173, which isn't derivable).
 const APP_ORIGIN = process.env.APP_ORIGIN || `https://${APP_HOST}`
 const API_ORIGIN = `https://${API_SUBDOMAIN}.${DOMAIN}` // https://members-api.yangfrenz.club
+// Effective public base URL of the API. OIDC_ISSUER is the single dev override
+// for the API origin (→ http://localhost:3000 in dev); everything that needs the
+// API's externally-reachable URL (the OIDC issuer, the Google OAuth callback)
+// derives from it, so those don't each need their own env var.
+const API_BASE_URL = process.env.OIDC_ISSUER || API_ORIGIN
 
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -55,7 +60,7 @@ module.exports = {
   // OIDC_CLIENT_ID is the audience of ID tokens (derived: the app host).
   // OIDC_PRIVATE_KEY is a PEM (optionally base64) RSA key; if unset, an ephemeral
   // key is generated at boot (dev only).
-  OIDC_ISSUER: process.env.OIDC_ISSUER || API_ORIGIN,
+  OIDC_ISSUER: API_BASE_URL,
   OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID || APP_HOST,
   OIDC_PRIVATE_KEY: process.env.OIDC_PRIVATE_KEY || '',
 
@@ -75,7 +80,10 @@ module.exports = {
 
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
-  GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || '',
+  // Derived from the API base URL (prod → https://{API_SUBDOMAIN}.{DOMAIN}, dev →
+  // the OIDC_ISSUER override). Must match an Authorized redirect URI in the Google
+  // console exactly. Still overridable if a non-standard path is ever needed.
+  GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || `${API_BASE_URL}/auth/google/callback`,
 
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
 

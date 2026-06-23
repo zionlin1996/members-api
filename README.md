@@ -31,35 +31,35 @@ yarn dev
 
 All public hostnames are **derived from three base variables**, so production only configures `DOMAIN`, `API_SUBDOMAIN`, and `APP_SUBDOMAIN`. Every domain-shaped value (CORS origin, WebAuthn RP/origin, OIDC issuer/audience, email domain) is computed from them — each still overridable by its own env var, which is required for local dev (http + localhost + ports can't be derived from a domain).
 
-| Variable                 | Required | Default                            | Description                                                                                             |
-| ------------------------ | -------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `DOMAIN`                 | No       | `yangfrenz.club`                   | Root domain; base for all derived hostnames                                                             |
-| `API_SUBDOMAIN`          | No       | `members-api`                      | API host = `{API_SUBDOMAIN}.{DOMAIN}`                                                                   |
-| `APP_SUBDOMAIN`          | No       | `members`                          | App (SPA) host = `{APP_SUBDOMAIN}.{DOMAIN}`                                                             |
-| `DATABASE_URL`           | Yes      | —                                  | PostgreSQL connection string                                                                            |
-| `JWT_ACCESS_SECRET`      | Yes      | —                                  | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC)                            |
-| `JWT_REFRESH_SECRET`     | Yes      | —                                  | HS256 secret for signing refresh tokens                                                                 |
-| `JWT_ACCESS_EXPIRES_IN`  | No       | `15m`                              | Access + ID token TTL                                                                                   |
-| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                               | Refresh token TTL                                                                                       |
-| `OIDC_PRIVATE_KEY`       | Prod     | _(ephemeral)_                      | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only)  |
-| `OIDC_ISSUER`            | Derived  | `https://{API_SUBDOMAIN}.{DOMAIN}` | Public base URL of the API; `iss` claim + discovery base. Override in dev → `http://localhost:3000`     |
-| `OIDC_CLIENT_ID`         | Derived  | `{APP_SUBDOMAIN}.{DOMAIN}`         | Audience (`aud`) of issued ID tokens                                                                    |
-| `OIDC_COOKIE_KEYS`       | Prod     | `JWT_ACCESS_SECRET`                | Comma-separated secrets signing the AS interaction/session cookies (rotate by prepending)               |
-| `OIDC_API_RESOURCE`      | Derived  | `{OIDC_ISSUER}/api`                | Reserved audience for future self-verifiable JWT resource-server tokens; must differ from `OIDC_ISSUER` |
-| `OIDC_ADAPTER`           | No       | `prisma`                           | AS persistence adapter — `prisma` or `memory` (tests only)                                              |
-| `EMAIL_DOMAIN`           | Derived  | `{DOMAIN}`                         | Domain used to compute member emails for claims                                                         |
-| `CORS_ORIGIN`            | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Comma-separated browser origins allowed credentialed requests. Override in dev                          |
-| `WEBAUTHN_RP_ID`         | Derived  | `{DOMAIN}`                         | Relying party domain — must match the browser-visible domain. Override in dev → `localhost`             |
-| `WEBAUTHN_ORIGIN`        | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Full app origin with protocol. Override in dev                                                          |
-| `WEBAUTHN_RP_NAME`       | Passkey  | —                                  | Human-readable app name shown by authenticators (e.g. `YangFrenz`)                                      |
-| `BCRYPT_ROUNDS`          | No       | `12`                               | bcrypt work factor                                                                                      |
-| `PORT`                   | No       | `3000`                             | HTTP port                                                                                               |
-| `NODE_ENV`               | No       | `development`                      | Environment name                                                                                        |
-| `GOOGLE_CLIENT_ID`       | Google   | —                                  | Google OAuth client ID                                                                                  |
-| `GOOGLE_CLIENT_SECRET`   | Google   | —                                  | Google OAuth client secret                                                                              |
-| `GOOGLE_CALLBACK_URL`    | Google   | —                                  | Full OAuth callback URL (must match the Google console exactly; not auto-derived)                       |
-| `TELEGRAM_BOT_TOKEN`     | Telegram | —                                  | Telegram bot token for HMAC widget verification                                                         |
-| `ADMIN_API_KEY`          | Admin    | —                                  | Secret key protecting the admin approval endpoint                                                       |
+| Variable                 | Required | Default                            | Description                                                                                                 |
+| ------------------------ | -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `DOMAIN`                 | No       | `yangfrenz.club`                   | Root domain; base for all derived hostnames                                                                 |
+| `API_SUBDOMAIN`          | No       | `members-api`                      | API host = `{API_SUBDOMAIN}.{DOMAIN}`                                                                       |
+| `APP_SUBDOMAIN`          | No       | `members`                          | App (SPA) host = `{APP_SUBDOMAIN}.{DOMAIN}`                                                                 |
+| `DATABASE_URL`           | Yes      | —                                  | PostgreSQL connection string                                                                                |
+| `JWT_ACCESS_SECRET`      | Yes      | —                                  | HS256 secret for OAuth **state** tokens (access tokens are RS256 — see OIDC)                                |
+| `JWT_REFRESH_SECRET`     | Yes      | —                                  | HS256 secret for signing refresh tokens                                                                     |
+| `JWT_ACCESS_EXPIRES_IN`  | No       | `15m`                              | Access + ID token TTL                                                                                       |
+| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                               | Refresh token TTL                                                                                           |
+| `OIDC_PRIVATE_KEY`       | Prod     | _(ephemeral)_                      | RSA private key (PEM or base64 PEM) for RS256 access/ID tokens. If unset, generated at boot (dev only)      |
+| `OIDC_ISSUER`            | Derived  | `https://{API_SUBDOMAIN}.{DOMAIN}` | Public base URL of the API; `iss` claim + discovery base. Override in dev → `http://localhost:3000`         |
+| `OIDC_CLIENT_ID`         | Derived  | `{APP_SUBDOMAIN}.{DOMAIN}`         | Audience (`aud`) of issued ID tokens                                                                        |
+| `OIDC_COOKIE_KEYS`       | Prod     | `JWT_ACCESS_SECRET`                | Comma-separated secrets signing the AS interaction/session cookies (rotate by prepending)                   |
+| `OIDC_API_RESOURCE`      | Derived  | `{OIDC_ISSUER}/api`                | Reserved audience for future self-verifiable JWT resource-server tokens; must differ from `OIDC_ISSUER`     |
+| `OIDC_ADAPTER`           | No       | `prisma`                           | AS persistence adapter — `prisma` or `memory` (tests only)                                                  |
+| `EMAIL_DOMAIN`           | Derived  | `{DOMAIN}`                         | Domain used to compute member emails for claims                                                             |
+| `CORS_ORIGIN`            | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Comma-separated browser origins allowed credentialed requests. Override in dev                              |
+| `WEBAUTHN_RP_ID`         | Derived  | `{DOMAIN}`                         | Relying party domain — must match the browser-visible domain. Override in dev → `localhost`                 |
+| `WEBAUTHN_ORIGIN`        | Derived  | `https://{APP_SUBDOMAIN}.{DOMAIN}` | Full app origin with protocol. Override in dev                                                              |
+| `WEBAUTHN_RP_NAME`       | Passkey  | —                                  | Human-readable app name shown by authenticators (e.g. `YangFrenz`)                                          |
+| `BCRYPT_ROUNDS`          | No       | `12`                               | bcrypt work factor                                                                                          |
+| `PORT`                   | No       | `3000`                             | HTTP port                                                                                                   |
+| `NODE_ENV`               | No       | `development`                      | Environment name                                                                                            |
+| `GOOGLE_CLIENT_ID`       | Google   | —                                  | Google OAuth client ID                                                                                      |
+| `GOOGLE_CLIENT_SECRET`   | Google   | —                                  | Google OAuth client secret                                                                                  |
+| `GOOGLE_CALLBACK_URL`    | Derived  | `{API_BASE}/auth/google/callback`  | OAuth callback; derived from the API base URL (follows `OIDC_ISSUER` in dev). Must match the Google console |
+| `TELEGRAM_BOT_TOKEN`     | Telegram | —                                  | Telegram bot token for HMAC widget verification                                                             |
+| `ADMIN_API_KEY`          | Admin    | —                                  | Secret key protecting the admin approval endpoint                                                           |
 
 ## API
 

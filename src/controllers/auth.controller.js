@@ -7,8 +7,16 @@ const telegramService = require('../services/telegram.service')
 const memberService = require('../services/member.service')
 const profileService = require('../services/profile.service')
 const oidcService = require('../services/oidc.service')
+const env = require('../config/env')
 const { isValidUsername } = require('../utils/username')
 const { signStateToken, verifyStateToken } = require('../utils/jwt')
+
+const REFRESH_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+}
 
 async function registerPassword(req, res, next) {
   try {
@@ -205,45 +213,49 @@ function redirectToGoogleLogin(_req, res) {
   return res.redirect(googleService.buildAuthUrl(state))
 }
 
+// Google reaches this via a full-page browser redirect, so it can't return JSON
+// like the XHR-based logins — it establishes the session (refresh cookie) and
+// 302s back to the SPA, which revives it via /auth/refresh on load. Errors bounce
+// to the SPA login page with an `?error=` message rather than dumping JSON.
 async function handleGoogleCallback(req, res, next) {
+  const loginUrl = (msg) =>
+    `${env.APP_ORIGIN}/login${msg ? `?error=${encodeURIComponent(msg)}` : ''}`
   try {
     const { code, state, error } = req.query
 
+    // Provider-side error (e.g. the user cancelled → access_denied).
     if (error) {
-      return res.status(400).json({ message: `Google OAuth error: ${error}` })
+      return res.redirect(
+        loginUrl(error === 'access_denied' ? '' : `Google sign-in failed: ${error}`),
+      )
     }
-
-    if (!code || !state) {
-      return res.status(400).json({ message: 'Missing code or state' })
-    }
+    if (!code || !state)
+      return res.redirect(loginUrl('Google sign-in failed: missing code or state'))
 
     let statePayload
     try {
       statePayload = verifyStateToken(state)
     } catch {
-      return res.status(400).json({ message: 'Invalid or expired state token' })
+      return res.redirect(loginUrl('Google sign-in link expired — please try again'))
     }
 
     const profile = await googleService.fetchProfile(code)
 
+    // Register first if this was a sign-up; then issue a session either way. A new
+    // account is UNVERIFIED — the SPA shows the pending-approval screen.
     if (statePayload.flow === 'register') {
       const { displayName, username } = statePayload
-      const member = await googleService.registerWithGoogle({ profile, displayName, username })
-      return res.status(201).json({ member })
+      await googleService.registerWithGoogle({ profile, displayName, username })
     }
 
-    const { accessToken, idToken, refreshToken } = await googleService.loginWithGoogle({ profile })
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-
-    return res.json({ accessToken, idToken })
+    const { refreshToken } = await googleService.loginWithGoogle({ profile })
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTS)
+    return res.redirect(env.APP_ORIGIN)
   } catch (err) {
-    next(err)
+    // Known auth failures (suspended account, duplicate, bad exchange) → login
+    // page with a message; unexpected errors bubble to the global handler.
+    if (err.status && err.status < 500) return res.redirect(loginUrl(err.message))
+    return next(err)
   }
 }
 

@@ -11,6 +11,7 @@ jest.mock('../src/services/google.service', () => ({
 
 const app = require('../src/app')
 const googleService = require('../src/services/google.service')
+const env = require('../src/config/env')
 const { signStateToken } = require('../src/utils/jwt')
 
 const MEMBER = {
@@ -68,7 +69,13 @@ describe('GET /auth/login/google', () => {
 // GET /auth/google/callback
 // ---------------------------------------------------------------------------
 describe('GET /auth/google/callback', () => {
-  it('201 — registers new member on register flow', async () => {
+  const LOGIN_TOKENS = {
+    accessToken: 'access-token',
+    idToken: 'id-token',
+    refreshToken: 'refresh-token',
+  }
+
+  it('register flow → registers, establishes a session, redirects to the SPA', async () => {
     const state = signStateToken({
       flow: 'register',
       displayName: 'Test User',
@@ -76,81 +83,76 @@ describe('GET /auth/google/callback', () => {
     })
     googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
     googleService.registerWithGoogle.mockResolvedValue(MEMBER)
+    googleService.loginWithGoogle.mockResolvedValue(LOGIN_TOKENS)
 
     const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
 
-    expect(res.status).toBe(201)
-    expect(res.body.member.username).toBe('testuser')
-  })
-
-  it('200 — logs in existing member on login flow', async () => {
-    const state = signStateToken({ flow: 'login' })
-    googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
-    googleService.loginWithGoogle.mockResolvedValue({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-    })
-
-    const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
-
-    expect(res.status).toBe(200)
-    expect(res.body.accessToken).toBe('access-token')
+    expect(googleService.registerWithGoogle).toHaveBeenCalled()
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toBe(env.APP_ORIGIN)
     expect(res.headers['set-cookie'][0]).toMatch(/refreshToken=/)
   })
 
-  it('400 — missing code', async () => {
+  it('login flow → establishes a session and redirects to the SPA', async () => {
+    const state = signStateToken({ flow: 'login' })
+    googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
+    googleService.loginWithGoogle.mockResolvedValue(LOGIN_TOKENS)
+
+    const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
+
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toBe(env.APP_ORIGIN)
+    expect(res.headers['set-cookie'][0]).toMatch(/refreshToken=/)
+  })
+
+  it('missing code → redirects to login with an error', async () => {
     const state = signStateToken({ flow: 'login' })
     const res = await request(app).get(`/auth/google/callback?state=${state}`)
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toMatch(`${env.APP_ORIGIN}/login?error=`)
   })
 
-  it('400 — invalid state token', async () => {
+  it('invalid state token → redirects to login with an error', async () => {
     const res = await request(app).get('/auth/google/callback?code=auth-code&state=not-a-valid-jwt')
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toMatch(`${env.APP_ORIGIN}/login?error=`)
   })
 
-  it('400 — Google OAuth error param', async () => {
+  it('user cancelled (access_denied) → redirects to login without an error banner', async () => {
     const res = await request(app).get('/auth/google/callback?error=access_denied')
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toBe(`${env.APP_ORIGIN}/login`)
   })
 
-  it('409 — Google account already registered', async () => {
+  it('duplicate Google account (register) → redirects to login with the error message', async () => {
     const state = signStateToken({
       flow: 'register',
       displayName: 'Test User',
       username: 'testuser',
     })
     googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
-    const err = new Error('Google account already linked to an existing member')
-    err.status = 409
+    const err = Object.assign(new Error('Google account already linked to an existing member'), {
+      status: 409,
+    })
     googleService.registerWithGoogle.mockRejectedValue(err)
 
     const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
 
-    expect(res.status).toBe(409)
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toContain(`${env.APP_ORIGIN}/login?error=`)
+    expect(decodeURIComponent(res.headers.location)).toContain('already linked')
   })
 
-  it('401 — no account linked on login flow', async () => {
+  it('SUSPENDED account on login → redirects to login with the error message', async () => {
     const state = signStateToken({ flow: 'login' })
     googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
-    const err = new Error('No account linked to this Google profile')
-    err.status = 401
-    googleService.loginWithGoogle.mockRejectedValue(err)
+    googleService.loginWithGoogle.mockRejectedValue(
+      Object.assign(new Error('Account suspended'), { status: 403 }),
+    )
 
     const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
 
-    expect(res.status).toBe(401)
-  })
-
-  it('403 — SUSPENDED account denied on login', async () => {
-    const state = signStateToken({ flow: 'login' })
-    googleService.fetchProfile.mockResolvedValue(GOOGLE_PROFILE)
-    const err = new Error('Account suspended')
-    err.status = 403
-    googleService.loginWithGoogle.mockRejectedValue(err)
-
-    const res = await request(app).get(`/auth/google/callback?code=auth-code&state=${state}`)
-
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(302)
+    expect(decodeURIComponent(res.headers.location)).toContain('Account suspended')
   })
 })
